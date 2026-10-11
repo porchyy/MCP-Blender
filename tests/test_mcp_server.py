@@ -168,3 +168,62 @@ def test_list_scene_collections_tool():
         assert parsed["master_collection"]["name"] == "Scene Collection"
         assert len(parsed["collections"]) == 1
 
+
+def test_inspect_mesh_tool_online():
+    """Tool returns serialized MeshInspectionResponse when online."""
+    from mcp_server.server import inspect_mesh
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.inspect_mesh") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "name": "Cube",
+                "type": "MESH",
+                "is_mesh": True,
+                "is_empty": False,
+                "vertex_count": 8,
+                "edge_count": 12,
+                "polygon_count": 6,
+                "dimensions": [2.0, 2.0, 2.0],
+                "transform": {
+                    "location": [0.0, 0.0, 0.0],
+                    "rotation_euler": [0.0, 0.0, 0.0],
+                    "scale": [1.0, 1.0, 1.0],
+                },
+                "validation": {
+                    "status": "clean",
+                    "is_watertight": True,
+                    "loose_vertices": 0,
+                    "loose_edges": 0,
+                    "boundary_edges": 0,
+                    "non_manifold_edges": 0,
+                    "normal_consistency": "consistent",
+                    "issues_found": [],
+                },
+                "message": "Mesh inspection complete (clean)",
+            },
+        )
+        res_json = inspect_mesh("Cube")
+        parsed = json.loads(res_json)
+        assert parsed["name"] == "Cube"
+        assert parsed["validation"]["status"] == "clean"
+        assert parsed["validation"]["is_watertight"] is True
+
+
+def test_inspect_mesh_tool_offline():
+    """Tool returns error json when bridge is offline."""
+    from mcp_server.server import inspect_mesh
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.inspect_mesh") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="error",
+            error="Blender bridge unavailable at 127.0.0.1:9876",
+        )
+        res_json = inspect_mesh("Cube")
+        parsed = json.loads(res_json)
+        assert parsed["status"] == "error"
+        assert "unavailable" in parsed["error"]
+
+

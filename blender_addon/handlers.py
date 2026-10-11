@@ -19,6 +19,18 @@ def _get_bpy():
         return None
 
 
+def _get_bmesh():
+    """Retrieve bmesh module if loaded in current Python process."""
+    if "bmesh" in sys.modules:
+        return sys.modules["bmesh"]
+    try:
+        import bmesh  # type: ignore
+        return bmesh
+    except ImportError:
+        return None
+
+
+
 def handle_get_status(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Retrieve Blender version, active scene, and object count safely."""
     bpy_module = _get_bpy()
@@ -265,13 +277,208 @@ def handle_list_scene_collections(params: Optional[Dict[str, Any]] = None) -> Di
     }
 
 
+def handle_inspect_mesh(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Inspect and validate mesh geometry, topology, and normals (read-only)."""
+    params = params or {}
+    object_name = params.get("object_name")
+    if not object_name or not isinstance(object_name, str) or not object_name.strip():
+        raise ValueError("Parameter 'object_name' is required and must be a non-empty string")
+    object_name = object_name.strip()
+    if len(object_name) > 256:
+        raise ValueError("Parameter 'object_name' exceeds maximum length of 256 characters")
+
+    bpy_module = _get_bpy()
+    if bpy_module is None:
+        raise RuntimeError("bpy module not found (standalone mode)")
+
+    scene = getattr(bpy_module.context, "scene", None)
+    scene_name = getattr(scene, "name", "unknown") if scene else "unknown"
+
+    target_obj = None
+    if scene and hasattr(scene, "objects"):
+        target_obj = scene.objects.get(object_name)
+    if target_obj is None and hasattr(bpy_module, "data") and hasattr(bpy_module.data, "objects"):
+        target_obj = bpy_module.data.objects.get(object_name)
+
+    if target_obj is None:
+        raise ValueError(f"Object '{object_name}' not found in active scene '{scene_name}'")
+
+    obj_type = str(getattr(target_obj, "type", "UNKNOWN"))
+    dims = [round(float(v), 5) for v in getattr(target_obj, "dimensions", (0.0, 0.0, 0.0))]
+    transform = {
+        "location": [round(float(v), 5) for v in getattr(target_obj, "location", (0.0, 0.0, 0.0))],
+        "rotation_euler": [round(float(v), 5) for v in getattr(target_obj, "rotation_euler", (0.0, 0.0, 0.0))],
+        "scale": [round(float(v), 5) for v in getattr(target_obj, "scale", (1.0, 1.0, 1.0))],
+    }
+
+    if obj_type != "MESH":
+        return {
+            "name": target_obj.name,
+            "type": obj_type,
+            "is_mesh": False,
+            "is_empty": False,
+            "vertex_count": None,
+            "edge_count": None,
+            "polygon_count": None,
+            "dimensions": dims,
+            "transform": transform,
+            "validation": None,
+            "message": f"Object '{target_obj.name}' is of type '{obj_type}', not a MESH",
+        }
+
+    mesh_data = getattr(target_obj, "data", None)
+    if mesh_data is None:
+        return {
+            "name": target_obj.name,
+            "type": "MESH",
+            "is_mesh": True,
+            "is_empty": True,
+            "vertex_count": 0,
+            "edge_count": 0,
+            "polygon_count": 0,
+            "dimensions": dims,
+            "transform": transform,
+            "validation": {
+                "status": "empty",
+                "is_watertight": False,
+                "loose_vertices": 0,
+                "loose_edges": 0,
+                "boundary_edges": 0,
+                "non_manifold_edges": 0,
+                "normal_consistency": "not_applicable",
+                "issues_found": ["mesh_is_empty"],
+            },
+            "message": "Mesh has no geometry data",
+        }
+
+    raw_verts = getattr(mesh_data, "vertices", [])
+    if len(raw_verts) == 0:
+        return {
+            "name": target_obj.name,
+            "type": "MESH",
+            "is_mesh": True,
+            "is_empty": True,
+            "vertex_count": 0,
+            "edge_count": 0,
+            "polygon_count": 0,
+            "dimensions": dims,
+            "transform": transform,
+            "validation": {
+                "status": "empty",
+                "is_watertight": False,
+                "loose_vertices": 0,
+                "loose_edges": 0,
+                "boundary_edges": 0,
+                "non_manifold_edges": 0,
+                "normal_consistency": "not_applicable",
+                "issues_found": ["mesh_is_empty"],
+            },
+            "message": "Mesh has no geometry (0 vertices)",
+        }
+
+    bmesh_module = _get_bmesh()
+    if bmesh_module is not None:
+        bm = bmesh_module.new()
+        try:
+            bm.from_mesh(mesh_data)
+            v_count = len(bm.verts)
+            e_count = len(bm.edges)
+            p_count = len(bm.faces)
+
+            loose_verts = sum(1 for v in bm.verts if not v.link_edges)
+            loose_edges = sum(1 for e in bm.edges if not e.link_faces)
+            boundary_edges = sum(1 for e in bm.edges if len(e.link_faces) == 1)
+            non_manifold_edges = sum(1 for e in bm.edges if len(e.link_faces) > 2)
+
+            if p_count < 2:
+                normal_consistency = "not_applicable"
+            else:
+                inconsistent_count = 0
+                manifold_checked = 0
+                for e in bm.edges:
+                    if len(e.link_loops) == 2:
+                        manifold_checked += 1
+                        l1, l2 = e.link_loops[0], e.link_loops[1]
+                        if l1.vert == l2.vert:
+                            inconsistent_count += 1
+                if manifold_checked == 0:
+                    normal_consistency = "not_applicable"
+                elif inconsistent_count > 0:
+                    normal_consistency = "inconsistent"
+                else:
+                    normal_consistency = "consistent"
+
+            issues = []
+            if loose_verts > 0:
+                issues.append(f"{loose_verts}_loose_vertices")
+            if loose_edges > 0:
+                issues.append(f"{loose_edges}_loose_edges")
+            if non_manifold_edges > 0:
+                issues.append(f"{non_manifold_edges}_non_manifold_edges")
+            if normal_consistency == "inconsistent":
+                issues.append("inconsistent_normals")
+
+            is_watertight = (
+                p_count > 0
+                and boundary_edges == 0
+                and non_manifold_edges == 0
+                and loose_verts == 0
+                and loose_edges == 0
+            )
+            status = "clean" if len(issues) == 0 else "issues_detected"
+
+            validation = {
+                "status": status,
+                "is_watertight": is_watertight,
+                "loose_vertices": loose_verts,
+                "loose_edges": loose_edges,
+                "boundary_edges": boundary_edges,
+                "non_manifold_edges": non_manifold_edges,
+                "normal_consistency": normal_consistency,
+                "issues_found": issues,
+            }
+        finally:
+            bm.free()
+    else:
+        # Fallback when bmesh module is unavailable
+        v_count = len(getattr(mesh_data, "vertices", []))
+        e_count = len(getattr(mesh_data, "edges", []))
+        p_count = len(getattr(mesh_data, "polygons", []))
+        validation = {
+            "status": "clean" if v_count > 0 else "empty",
+            "is_watertight": False,
+            "loose_vertices": 0,
+            "loose_edges": 0,
+            "boundary_edges": 0,
+            "non_manifold_edges": 0,
+            "normal_consistency": "unsupported",
+            "issues_found": [],
+        }
+
+    return {
+        "name": target_obj.name,
+        "type": "MESH",
+        "is_mesh": True,
+        "is_empty": False,
+        "vertex_count": v_count,
+        "edge_count": e_count,
+        "polygon_count": p_count,
+        "dimensions": dims,
+        "transform": transform,
+        "validation": validation,
+        "message": f"Mesh inspection complete ({validation['status']})",
+    }
+
+
 # Strictly allowlisted actions.
 ACTION_HANDLERS = {
     "get_status": handle_get_status,
     "list_scene_objects": handle_list_scene_objects,
     "get_object_details": handle_get_object_details,
     "list_scene_collections": handle_list_scene_collections,
+    "inspect_mesh": handle_inspect_mesh,
 }
+
 
 
 def execute_action(action: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

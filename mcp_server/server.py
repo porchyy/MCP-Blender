@@ -6,6 +6,7 @@ from mcp_server.models import (
     SceneObjectsResponse,
     ObjectDetails,
     SceneCollectionsResponse,
+    MeshInspectionResponse,
 )
 
 mcp = MCPServer("blender-asset-prep")
@@ -74,6 +75,28 @@ def list_scene_collections() -> str:
     return json.dumps({"status": "error", "error": res.error or "Failed to list collections"}, indent=2)
 
 
+@mcp.tool()
+def inspect_mesh(object_name: str) -> str:
+    """Inspect and validate mesh geometry, topology, and normals (read-only).
+    
+    Parameters:
+    - object_name: Exact name of the object in Blender scene.
+    
+    Returns metrics (vertices, edges, polygons, dimensions, transform) and validation
+    status (loose vertices/edges, boundary edges, non-manifold edges, normal consistency).
+    """
+    client = BlenderBridgeClient()
+    res = client.inspect_mesh(object_name=object_name)
+    if res.status == "ok":
+        try:
+            parsed = MeshInspectionResponse(**res.data)
+            return parsed.model_dump_json(indent=2)
+        except Exception:
+            return json.dumps(res.data, indent=2)
+    return json.dumps({"status": "error", "error": res.error or f"Failed to inspect mesh for '{object_name}'"}, indent=2)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
+
 

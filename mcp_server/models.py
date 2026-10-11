@@ -82,3 +82,31 @@ class SceneCollectionsResponse(BaseModel):
     master_collection: CollectionSummary
     collections: list[CollectionSummary]
 
+
+class MeshValidationSummary(BaseModel):
+    """Mesh topological and geometric validation summary."""
+    status: str = Field(..., description="'clean', 'issues_detected', 'empty', or 'not_applicable'")
+    is_watertight: bool = Field(..., description="True if mesh is closed, manifold, and has no holes or loose parts")
+    loose_vertices: int = Field(0, description="Vertices not connected to any edges")
+    loose_edges: int = Field(0, description="Edges not connected to any faces")
+    boundary_edges: int = Field(0, description="Edges belonging to exactly one face (open borders)")
+    non_manifold_edges: int = Field(0, description="Edges shared by 3 or more faces")
+    normal_consistency: str = Field(..., description="'consistent', 'inconsistent', 'not_applicable', or 'unsupported'")
+    issues_found: list[str] = Field(default_factory=list, description="List of detected topological issues")
+
+
+class MeshInspectionResponse(BaseModel):
+    """Detailed inspection and validation metrics of an object's mesh."""
+    name: str = Field(..., description="Object name")
+    type: str = Field(..., description="Object type (e.g. MESH, CAMERA, LIGHT)")
+    is_mesh: bool = Field(..., description="Whether this object is a MESH")
+    is_empty: bool = Field(False, description="Whether mesh has 0 vertices")
+    vertex_count: Optional[int] = Field(None, description="Total vertices count")
+    edge_count: Optional[int] = Field(None, description="Total edges count")
+    polygon_count: Optional[int] = Field(None, description="Total polygons/faces count")
+    dimensions: list[float] = Field(..., description="Bounding box dimensions [X, Y, Z]")
+    transform: Dict[str, list[float]] = Field(..., description="Transforms: location, rotation_euler, scale")
+    validation: Optional[MeshValidationSummary] = Field(None, description="Validation summary if MESH")
+    message: str = Field("", description="Status notes or explanation")
+
+

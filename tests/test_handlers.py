@@ -228,3 +228,200 @@ def test_list_scene_collections_nested():
         assert cols["Weapons"]["objects"] == ["Sword"]
         assert cols["Weapons"]["children"] == []
 
+
+def test_inspect_mesh_valid_watertight():
+    """Valid watertight mesh reports clean status, 0 issues, and consistent normals."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+
+    mock_obj = MagicMock()
+    mock_obj.name = "Cube"
+    mock_obj.type = "MESH"
+    mock_obj.location = (0.0, 0.0, 0.0)
+    mock_obj.rotation_euler = (0.0, 0.0, 0.0)
+    mock_obj.scale = (1.0, 1.0, 1.0)
+    mock_obj.dimensions = (2.0, 2.0, 2.0)
+    mock_obj.data.vertices = [1, 2, 3, 4, 5, 6, 7, 8]
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "Cube" else None
+
+    # Mock BMesh
+    mock_bmesh = MagicMock()
+    mock_bm = MagicMock()
+    mock_bmesh.new.return_value = mock_bm
+
+    # 8 vertices, all connected
+    mock_verts = [MagicMock(link_edges=[1, 2]) for _ in range(8)]
+    mock_bm.verts = mock_verts
+
+    # 6 faces
+    mock_faces = [MagicMock() for _ in range(6)]
+    mock_bm.faces = mock_faces
+
+    # 12 manifold edges with consistent winding
+    mock_edges = []
+    for _ in range(12):
+        edge = MagicMock()
+        edge.link_faces = [1, 2]
+        l1 = MagicMock(vert=1)
+        l2 = MagicMock(vert=2)  # different vert -> consistent
+        edge.link_loops = [l1, l2]
+        mock_edges.append(edge)
+    mock_bm.edges = mock_edges
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        mp.setitem(sys.modules, "bmesh", mock_bmesh)
+        from blender_addon.handlers import execute_action
+        result = execute_action("inspect_mesh", {"object_name": "Cube"})
+
+        assert result["name"] == "Cube"
+        assert result["type"] == "MESH"
+        assert result["is_mesh"] is True
+        assert result["is_empty"] is False
+        assert result["vertex_count"] == 8
+        assert result["polygon_count"] == 6
+        assert result["edge_count"] == 12
+        assert result["dimensions"] == [2.0, 2.0, 2.0]
+        assert result["validation"]["status"] == "clean"
+        assert result["validation"]["is_watertight"] is True
+        assert result["validation"]["loose_vertices"] == 0
+        assert result["validation"]["loose_edges"] == 0
+        assert result["validation"]["boundary_edges"] == 0
+        assert result["validation"]["non_manifold_edges"] == 0
+        assert result["validation"]["normal_consistency"] == "consistent"
+        assert result["validation"]["issues_found"] == []
+        assert mock_bm.free.called
+
+
+def test_inspect_mesh_with_topology_issues():
+    """Mesh with loose parts, non-manifold edges, and flipped normals is flagged."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+
+    mock_obj = MagicMock()
+    mock_obj.name = "BadMesh"
+    mock_obj.type = "MESH"
+    mock_obj.location = (0.0, 0.0, 0.0)
+    mock_obj.rotation_euler = (0.0, 0.0, 0.0)
+    mock_obj.scale = (1.0, 1.0, 1.0)
+    mock_obj.dimensions = (1.0, 1.0, 1.0)
+    mock_obj.data.vertices = [1, 2, 3]
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "BadMesh" else None
+
+    mock_bmesh = MagicMock()
+    mock_bm = MagicMock()
+    mock_bmesh.new.return_value = mock_bm
+
+    # 1 connected vert, 1 loose vert
+    mock_bm.verts = [MagicMock(link_edges=[1]), MagicMock(link_edges=[])]
+    mock_bm.faces = [MagicMock(), MagicMock()]
+
+    # 1 loose edge, 1 boundary edge, 1 non-manifold edge, 1 flipped normal edge
+    e_loose = MagicMock(link_faces=[], link_loops=[])
+    e_boundary = MagicMock(link_faces=[1], link_loops=[MagicMock()])
+    e_non_manifold = MagicMock(link_faces=[1, 2, 3], link_loops=[1, 2, 3])
+    # flipped normal: loop1.vert == loop2.vert
+    e_flipped = MagicMock(link_faces=[1, 2], link_loops=[MagicMock(vert=1), MagicMock(vert=1)])
+
+    mock_bm.edges = [e_loose, e_boundary, e_non_manifold, e_flipped]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        mp.setitem(sys.modules, "bmesh", mock_bmesh)
+        from blender_addon.handlers import execute_action
+        result = execute_action("inspect_mesh", {"object_name": "BadMesh"})
+
+        assert result["validation"]["status"] == "issues_detected"
+        assert result["validation"]["is_watertight"] is False
+        assert result["validation"]["loose_vertices"] == 1
+        assert result["validation"]["loose_edges"] == 1
+        assert result["validation"]["boundary_edges"] == 1
+        assert result["validation"]["non_manifold_edges"] == 1
+        assert result["validation"]["normal_consistency"] == "inconsistent"
+        assert "1_loose_vertices" in result["validation"]["issues_found"]
+        assert "1_loose_edges" in result["validation"]["issues_found"]
+        assert "1_non_manifold_edges" in result["validation"]["issues_found"]
+        assert "inconsistent_normals" in result["validation"]["issues_found"]
+
+
+def test_inspect_mesh_empty_geometry():
+    """Empty mesh with 0 vertices reports empty status without crashing."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+
+    mock_obj = MagicMock()
+    mock_obj.name = "EmptyMesh"
+    mock_obj.type = "MESH"
+    mock_obj.location = (0.0, 0.0, 0.0)
+    mock_obj.rotation_euler = (0.0, 0.0, 0.0)
+    mock_obj.scale = (1.0, 1.0, 1.0)
+    mock_obj.dimensions = (0.0, 0.0, 0.0)
+    mock_obj.data.vertices = []
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "EmptyMesh" else None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+        result = execute_action("inspect_mesh", {"object_name": "EmptyMesh"})
+
+        assert result["is_mesh"] is True
+        assert result["is_empty"] is True
+        assert result["vertex_count"] == 0
+        assert result["validation"]["status"] == "empty"
+        assert result["validation"]["normal_consistency"] == "not_applicable"
+        assert "mesh_is_empty" in result["validation"]["issues_found"]
+
+
+def test_inspect_mesh_non_mesh_object():
+    """Non-mesh object (e.g. Camera) reports is_mesh=False and not_applicable."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+
+    mock_obj = MagicMock()
+    mock_obj.name = "Camera"
+    mock_obj.type = "CAMERA"
+    mock_obj.location = (0.0, -10.0, 5.0)
+    mock_obj.rotation_euler = (1.1, 0.0, 0.8)
+    mock_obj.scale = (1.0, 1.0, 1.0)
+    mock_obj.dimensions = (0.0, 0.0, 0.0)
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "Camera" else None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+        result = execute_action("inspect_mesh", {"object_name": "Camera"})
+
+        assert result["name"] == "Camera"
+        assert result["type"] == "CAMERA"
+        assert result["is_mesh"] is False
+        assert result["validation"] is None
+        assert "not a MESH" in result["message"]
+
+
+def test_inspect_mesh_not_found():
+    """Missing object raises ValueError."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+    mock_bpy.context.scene.objects.get.return_value = None
+    mock_bpy.data.objects.get.return_value = None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+        with pytest.raises(ValueError, match="Object 'Ghost' not found in active scene 'Scene'"):
+            execute_action("inspect_mesh", {"object_name": "Ghost"})
+
+
+def test_inspect_mesh_invalid_input():
+    """Malformed or missing object_name raises ValueError."""
+    from blender_addon.handlers import execute_action
+    with pytest.raises(ValueError, match="Parameter 'object_name' is required"):
+        execute_action("inspect_mesh", {})
+    with pytest.raises(ValueError, match="Parameter 'object_name' is required"):
+        execute_action("inspect_mesh", {"object_name": "   "})
+    with pytest.raises(ValueError, match="Parameter 'object_name' is required"):
+        execute_action("inspect_mesh", {"object_name": 123})
+    with pytest.raises(ValueError, match="exceeds maximum length"):
+        execute_action("inspect_mesh", {"object_name": "a" * 257})
+
+

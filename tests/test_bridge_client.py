@@ -140,3 +140,45 @@ def test_bridge_client_list_scene_collections_success():
         assert res.data["master_collection"]["name"] == "Scene Collection"
         assert len(res.data["collections"]) == 1
 
+
+def test_bridge_client_inspect_mesh_success():
+    """Client successfully sends inspect_mesh and receives validation data."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "name": "Cube",
+            "type": "MESH",
+            "is_mesh": True,
+            "is_empty": False,
+            "vertex_count": 8,
+            "edge_count": 12,
+            "polygon_count": 6,
+            "dimensions": [2.0, 2.0, 2.0],
+            "transform": {
+                "location": [0.0, 0.0, 0.0],
+                "rotation_euler": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+            },
+            "validation": {
+                "status": "clean",
+                "is_watertight": True,
+                "loose_vertices": 0,
+                "loose_edges": 0,
+                "boundary_edges": 0,
+                "non_manifold_edges": 0,
+                "normal_consistency": "consistent",
+                "issues_found": [],
+            },
+            "message": "Mesh inspection complete (clean)",
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.inspect_mesh("Cube")
+        assert res.status == "ok"
+        assert res.data["name"] == "Cube"
+        assert res.data["validation"]["is_watertight"] is True
+
+

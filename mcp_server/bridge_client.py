@@ -87,3 +87,8 @@ class BlenderBridgeClient:
         """Query collection hierarchy and membership in the active scene."""
         return self.send_action("list_scene_collections", {})
 
+    def inspect_mesh(self, object_name: str) -> BridgeActionResponse:
+        """Inspect and validate mesh geometry and topology for an object."""
+        return self.send_action("inspect_mesh", {"object_name": object_name})
+
+

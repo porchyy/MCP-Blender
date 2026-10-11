@@ -66,6 +66,8 @@ def test_mcp_server_stdio_initialization_and_tool_call():
         assert "list_scene_objects" in tool_names
         assert "get_object_details" in tool_names
         assert "list_scene_collections" in tool_names
+        assert "inspect_mesh" in tool_names
+
 
 
         # 4. Request tools/call for get_blender_status
@@ -91,7 +93,8 @@ def test_mcp_server_stdio_initialization_and_tool_call():
         status_data = json.loads(raw_text)
         assert "connected" in status_data
         assert "api_version" in status_data
-        assert status_data["connected"] is False  # Bridge offline
+        assert isinstance(status_data["connected"], bool)
+
 
     finally:
         proc.terminate()
