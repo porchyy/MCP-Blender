@@ -1,6 +1,7 @@
 """Localhost HTTP Bridge Server running inside Blender using Python standard library."""
 import json
 import threading
+from typing import Optional
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 try:
     from .handlers import execute_action
