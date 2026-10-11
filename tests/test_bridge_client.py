@@ -247,4 +247,73 @@ def test_bridge_client_clean_mesh_success():
         assert res.data["merged_vertices"] == 2
 
 
+def test_bridge_client_batch_inspect_mesh_success():
+    """Client successfully sends batch_inspect_mesh."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "results": [
+                {"name": "Cube1", "status": "PASS", "data": {"vertex_count": 8}},
+                {"name": "Cube2", "status": "PASS", "data": {"vertex_count": 8}},
+            ],
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.batch_inspect_mesh(["Cube1", "Cube2"])
+        assert res.status == "ok"
+        assert res.data["total"] == 2
+        assert res.data["passed"] == 2
+
+
+def test_bridge_client_batch_clean_mesh_success():
+    """Client successfully sends batch_clean_mesh."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "total": 2,
+            "passed": 1,
+            "failed": 1,
+            "results": [
+                {"name": "Cube1", "status": "PASS", "data": {"merged_vertices": 0}},
+                {"name": "BadObj", "status": "FAIL", "error": "Not a mesh"},
+            ],
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.batch_clean_mesh(["Cube1", "BadObj"])
+        assert res.status == "ok"
+        assert res.data["passed"] == 1
+        assert res.data["failed"] == 1
+
+
+def test_bridge_client_batch_set_origin_to_bottom_success():
+    """Client successfully sends batch_set_origin_to_bottom."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "results": [{"name": "Cube", "status": "PASS", "data": {"origin_type": "BOTTOM_CENTER"}}],
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.batch_set_origin_to_bottom(["Cube"])
+        assert res.status == "ok"
+        assert res.data["passed"] == 1
+
+
+
 

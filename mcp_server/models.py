@@ -1,5 +1,5 @@
 """Pydantic models for Blender Asset Prep MCP."""
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -137,6 +137,23 @@ class CleanMeshResponse(BaseModel):
     merged_vertices: int
     normals_recalculated: bool
     message: str
+
+
+class BatchItemResult(BaseModel):
+    """Result for a single object in a batch operation."""
+    name: str
+    status: Literal["PASS", "FAIL"]
+    data: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+class BatchOperationResponse(BaseModel):
+    """Summary and itemized results for a batch operation."""
+    total: int
+    passed: int
+    failed: int
+    results: list[BatchItemResult]
+
 
 
 

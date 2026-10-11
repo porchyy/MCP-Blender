@@ -5,7 +5,7 @@ Only registered actions in ACTION_HANDLERS are allowed to execute.
 Arbitrary code execution (eval, exec, subprocess, system) is strictly forbidden.
 """
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 
 def _get_bpy():
@@ -690,6 +690,72 @@ def handle_reload_addon(params: Optional[Dict[str, Any]] = None) -> Dict[str, An
     return {"status": "reloaded", "message": "Addon handlers reloaded successfully"}
 
 
+def _run_batch_operation(
+    params: Optional[Dict[str, Any]],
+    single_handler: Callable[[Dict[str, Any]], Dict[str, Any]],
+    extra_params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Execute a single handler over a batch of object names with error isolation."""
+    params = params or {}
+    object_names = params.get("object_names")
+    if not isinstance(object_names, list) or len(object_names) == 0:
+        raise ValueError("Parameter 'object_names' is required and must be a non-empty list of strings")
+    if len(object_names) > 100:
+        raise ValueError("Batch size exceeds maximum limit of 100 objects")
+
+    results: List[Dict[str, Any]] = []
+    passed = 0
+    failed = 0
+
+    for item in object_names:
+        if not isinstance(item, str) or not item.strip():
+            results.append({"name": str(item), "status": "FAIL", "error": "Object name must be a non-empty string"})
+            failed += 1
+            continue
+        name = item.strip()
+        if len(name) > 256:
+            results.append({"name": name, "status": "FAIL", "error": "Object name exceeds maximum length of 256 characters"})
+            failed += 1
+            continue
+        try:
+            call_params = {"object_name": name}
+            if extra_params:
+                call_params.update(extra_params)
+            data = single_handler(call_params)
+            results.append({"name": name, "status": "PASS", "data": data})
+            passed += 1
+        except Exception as exc:
+            results.append({"name": name, "status": "FAIL", "error": str(exc)})
+            failed += 1
+
+    return {
+        "total": len(object_names),
+        "passed": passed,
+        "failed": failed,
+        "results": results,
+    }
+
+
+def handle_batch_inspect_mesh(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Inspect and validate mesh geometry for multiple objects with error isolation."""
+    return _run_batch_operation(params, handle_inspect_mesh)
+
+
+def handle_batch_clean_mesh(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Clean meshes for multiple objects with error isolation."""
+    params = params or {}
+    extra = {
+        "merge_distance": params.get("merge_distance", 0.0001),
+        "recalculate_normals": params.get("recalculate_normals", True),
+    }
+    return _run_batch_operation(params, handle_clean_mesh, extra)
+
+
+def handle_batch_set_origin_to_bottom(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Set origin to bottom center for multiple objects with error isolation."""
+    return _run_batch_operation(params, handle_set_origin_to_bottom)
+
+
 # Strictly allowlisted actions.
 ACTION_HANDLERS = {
     "get_status": handle_get_status,
@@ -701,6 +767,9 @@ ACTION_HANDLERS = {
     "set_origin_to_bottom": handle_set_origin_to_bottom,
     "clean_mesh": handle_clean_mesh,
     "reload_addon": handle_reload_addon,
+    "batch_inspect_mesh": handle_batch_inspect_mesh,
+    "batch_clean_mesh": handle_batch_clean_mesh,
+    "batch_set_origin_to_bottom": handle_batch_set_origin_to_bottom,
 }
 
 

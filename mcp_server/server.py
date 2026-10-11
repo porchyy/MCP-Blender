@@ -10,6 +10,7 @@ from mcp_server.models import (
     ApplyTransformsResponse,
     SetOriginResponse,
     CleanMeshResponse,
+    BatchOperationResponse,
 )
 
 mcp = MCPServer("blender-asset-prep")
@@ -176,8 +177,73 @@ def clean_mesh(
     return json.dumps({"status": "error", "error": res.error or f"Failed to clean mesh for '{object_name}'"}, indent=2)
 
 
+@mcp.tool()
+def batch_inspect_mesh(object_names: list[str]) -> str:
+    """Inspect and validate mesh geometry and topology for multiple objects with error isolation.
+    
+    Parameters:
+    - object_names: List of exact object names to inspect in the active Blender scene.
+    """
+    client = BlenderBridgeClient()
+    res = client.batch_inspect_mesh(object_names=object_names)
+    if res.status == "ok":
+        try:
+            parsed = BatchOperationResponse(**res.data)
+            return parsed.model_dump_json(indent=2)
+        except Exception:
+            return json.dumps(res.data, indent=2)
+    return json.dumps({"status": "error", "error": res.error or "Failed to batch inspect meshes"}, indent=2)
+
+
+@mcp.tool()
+def batch_clean_mesh(
+    object_names: list[str],
+    merge_distance: float = 0.0001,
+    recalculate_normals: bool = True,
+) -> str:
+    """Clean meshes for multiple objects with error isolation.
+    
+    Parameters:
+    - object_names: List of exact object names to clean.
+    - merge_distance: Maximum distance between vertices to merge (default 0.0001).
+    - recalculate_normals: Whether to recalculate face normals outward (default True).
+    """
+    client = BlenderBridgeClient()
+    res = client.batch_clean_mesh(
+        object_names=object_names,
+        merge_distance=merge_distance,
+        recalculate_normals=recalculate_normals,
+    )
+    if res.status == "ok":
+        try:
+            parsed = BatchOperationResponse(**res.data)
+            return parsed.model_dump_json(indent=2)
+        except Exception:
+            return json.dumps(res.data, indent=2)
+    return json.dumps({"status": "error", "error": res.error or "Failed to batch clean meshes"}, indent=2)
+
+
+@mcp.tool()
+def batch_set_origin_to_bottom(object_names: list[str]) -> str:
+    """Set origin to bottom-center for multiple objects with error isolation.
+    
+    Parameters:
+    - object_names: List of exact object names to set origin.
+    """
+    client = BlenderBridgeClient()
+    res = client.batch_set_origin_to_bottom(object_names=object_names)
+    if res.status == "ok":
+        try:
+            parsed = BatchOperationResponse(**res.data)
+            return parsed.model_dump_json(indent=2)
+        except Exception:
+            return json.dumps(res.data, indent=2)
+    return json.dumps({"status": "error", "error": res.error or "Failed to batch set origins"}, indent=2)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
+
 
 
 

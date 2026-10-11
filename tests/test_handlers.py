@@ -625,5 +625,142 @@ def test_set_origin_to_bottom_world_space_invariance():
         assert world_verts_after == world_verts_before
 
 
+def test_batch_inspect_mesh_with_error_isolation():
+    """Batch inspect isolates errors and returns per-object PASS/FAIL validation report."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+
+    cube = MagicMock()
+    cube.name = "Cube"
+    cube.type = "MESH"
+    cube.location = (0.0, 0.0, 0.0)
+    cube.rotation_euler = (0.0, 0.0, 0.0)
+    cube.scale = (1.0, 1.0, 1.0)
+    cube.dimensions = (2.0, 2.0, 2.0)
+    cube.data.vertices = [1, 2, 3]
+
+    cam = MagicMock()
+    cam.name = "Camera"
+    cam.type = "CAMERA"
+    cam.location = (0.0, -10.0, 5.0)
+    cam.rotation_euler = (0.0, 0.0, 0.0)
+    cam.scale = (1.0, 1.0, 1.0)
+    cam.dimensions = (0.0, 0.0, 0.0)
+
+    objects_map = {"Cube": cube, "Camera": cam}
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: objects_map.get(n)
+    mock_bpy.data.objects.get.side_effect = lambda n: objects_map.get(n)
+
+    mock_bmesh = MagicMock()
+    mock_bm = MagicMock()
+    mock_bm.verts = [MagicMock(link_edges=[1])] * 3
+    mock_bm.edges = []
+    mock_bm.faces = []
+    mock_bmesh.new.return_value = mock_bm
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        mp.setitem(sys.modules, "bmesh", mock_bmesh)
+        from blender_addon.handlers import execute_action
+
+        res = execute_action("batch_inspect_mesh", {"object_names": ["Cube", "Ghost", "Camera"]})
+
+        assert res["total"] == 3
+        assert res["passed"] == 2
+        assert res["failed"] == 1
+        assert res["results"][0]["name"] == "Cube"
+        assert res["results"][0]["status"] == "PASS"
+        assert res["results"][1]["name"] == "Ghost"
+        assert res["results"][1]["status"] == "FAIL"
+        assert "not found" in res["results"][1]["error"]
+        assert res["results"][2]["name"] == "Camera"
+        assert res["results"][2]["status"] == "PASS"
+        assert res["results"][2]["data"]["is_mesh"] is False
+
+
+def test_batch_clean_mesh_with_error_isolation():
+    """Batch clean continues processing remaining objects when one object fails."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+
+    cube = MagicMock()
+    cube.name = "Cube"
+    cube.type = "MESH"
+
+    cam = MagicMock()
+    cam.name = "Camera"
+    cam.type = "CAMERA"
+
+    objects_map = {"Cube": cube, "Camera": cam}
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: objects_map.get(n)
+
+    mock_bmesh = MagicMock()
+    mock_bm = MagicMock()
+    mock_bm.verts = [1] * 8
+    mock_bm.faces = []
+    mock_bmesh.new.return_value = mock_bm
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        mp.setitem(sys.modules, "bmesh", mock_bmesh)
+        from blender_addon.handlers import execute_action
+
+        res = execute_action("batch_clean_mesh", {"object_names": ["Camera", "Cube"]})
+
+        assert res["total"] == 2
+        assert res["passed"] == 1
+        assert res["failed"] == 1
+        assert res["results"][0]["name"] == "Camera"
+        assert res["results"][0]["status"] == "FAIL"
+        assert "requires a MESH" in res["results"][0]["error"]
+        assert res["results"][1]["name"] == "Cube"
+        assert res["results"][1]["status"] == "PASS"
+
+
+def test_batch_set_origin_to_bottom_with_error_isolation():
+    """Batch set origin isolates missing object errors."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+
+    cube = MagicMock()
+    cube.name = "Cube"
+    cube.type = "MESH"
+    cube.location = [0.0, 0.0, 0.0]
+    cube.bound_box = [[-1, -1, -1], [1, 1, 1]]
+
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: cube if n == "Cube" else None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+
+        res = execute_action("batch_set_origin_to_bottom", {"object_names": ["Cube", "Ghost"]})
+
+        assert res["total"] == 2
+        assert res["passed"] == 1
+        assert res["failed"] == 1
+        assert res["results"][0]["status"] == "PASS"
+        assert res["results"][1]["status"] == "FAIL"
+
+
+def test_batch_operations_input_validation():
+    """Batch operations validate inputs, empty lists, and enforce size limits."""
+    from blender_addon.handlers import execute_action
+
+    # Missing or empty object_names
+    with pytest.raises(ValueError, match="Parameter 'object_names' is required"):
+        execute_action("batch_inspect_mesh", {})
+    with pytest.raises(ValueError, match="non-empty list"):
+        execute_action("batch_inspect_mesh", {"object_names": []})
+    with pytest.raises(ValueError, match="non-empty list"):
+        execute_action("batch_inspect_mesh", {"object_names": "not-a-list"})
+
+    # Exceeding batch limit
+    too_many = [f"Obj{i}" for i in range(101)]
+    with pytest.raises(ValueError, match="Batch size exceeds maximum limit of 100"):
+        execute_action("batch_inspect_mesh", {"object_names": too_many})
+
+
+
 
 

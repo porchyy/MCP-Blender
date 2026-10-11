@@ -129,5 +129,30 @@ class BlenderBridgeClient:
             },
         )
 
+    def batch_inspect_mesh(self, object_names: list[str]) -> BridgeActionResponse:
+        """Inspect and validate mesh geometry for multiple objects."""
+        return self.send_action("batch_inspect_mesh", {"object_names": object_names})
+
+    def batch_clean_mesh(
+        self,
+        object_names: list[str],
+        merge_distance: float = 0.0001,
+        recalculate_normals: bool = True,
+    ) -> BridgeActionResponse:
+        """Clean meshes for multiple objects with error isolation."""
+        return self.send_action(
+            "batch_clean_mesh",
+            {
+                "object_names": object_names,
+                "merge_distance": merge_distance,
+                "recalculate_normals": recalculate_normals,
+            },
+        )
+
+    def batch_set_origin_to_bottom(self, object_names: list[str]) -> BridgeActionResponse:
+        """Adjust origins to bottom-center for multiple objects with error isolation."""
+        return self.send_action("batch_set_origin_to_bottom", {"object_names": object_names})
+
+
 
 

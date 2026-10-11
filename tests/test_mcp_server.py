@@ -295,4 +295,77 @@ def test_clean_mesh_tool():
         assert parsed["merged_vertices"] == 2
 
 
+def test_batch_inspect_mesh_tool():
+    """Tool returns BatchOperationResponse for inspect."""
+    from mcp_server.server import batch_inspect_mesh
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.batch_inspect_mesh") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "total": 2,
+                "passed": 2,
+                "failed": 0,
+                "results": [
+                    {"name": "Cube1", "status": "PASS", "data": {"vertex_count": 8}},
+                    {"name": "Cube2", "status": "PASS", "data": {"vertex_count": 8}},
+                ],
+            },
+        )
+        res_json = batch_inspect_mesh(["Cube1", "Cube2"])
+        parsed = json.loads(res_json)
+        assert parsed["total"] == 2
+        assert parsed["passed"] == 2
+
+
+def test_batch_clean_mesh_tool():
+    """Tool returns BatchOperationResponse for clean."""
+    from mcp_server.server import batch_clean_mesh
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.batch_clean_mesh") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "total": 2,
+                "passed": 1,
+                "failed": 1,
+                "results": [
+                    {"name": "Cube1", "status": "PASS", "data": {"merged_vertices": 0}},
+                    {"name": "Ghost", "status": "FAIL", "error": "Object not found"},
+                ],
+            },
+        )
+        res_json = batch_clean_mesh(["Cube1", "Ghost"])
+        parsed = json.loads(res_json)
+        assert parsed["total"] == 2
+        assert parsed["passed"] == 1
+        assert parsed["failed"] == 1
+
+
+def test_batch_set_origin_to_bottom_tool():
+    """Tool returns BatchOperationResponse for set origin."""
+    from mcp_server.server import batch_set_origin_to_bottom
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.batch_set_origin_to_bottom") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "total": 1,
+                "passed": 1,
+                "failed": 0,
+                "results": [
+                    {"name": "Cube", "status": "PASS", "data": {"origin_type": "BOTTOM_CENTER"}},
+                ],
+            },
+        )
+        res_json = batch_set_origin_to_bottom(["Cube"])
+        parsed = json.loads(res_json)
+        assert parsed["total"] == 1
+        assert parsed["passed"] == 1
+
+
+
 
