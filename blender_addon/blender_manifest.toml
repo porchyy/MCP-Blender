@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "blender_asset_prep"
-version = "0.1.0"
+version = "0.2.0"
 name = "Blender Asset Prep MCP Bridge"
 tagline = "Local bridge connecting Blender to Google Antigravity via MCP"
 maintainer = "Antigravity Pair"
