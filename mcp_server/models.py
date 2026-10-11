@@ -110,3 +110,33 @@ class MeshInspectionResponse(BaseModel):
     message: str = Field("", description="Status notes or explanation")
 
 
+class ApplyTransformsResponse(BaseModel):
+    """Response after applying/freezing object transforms."""
+    name: str
+    applied: Dict[str, bool]
+    transforms_before: Dict[str, list[float]]
+    transforms_after: Dict[str, list[float]]
+    message: str
+
+
+class SetOriginResponse(BaseModel):
+    """Response after adjusting object origin/pivot point."""
+    name: str
+    origin_type: str = "BOTTOM_CENTER"
+    delta_applied: list[float]
+    location_before: list[float]
+    location_after: list[float]
+    message: str
+
+
+class CleanMeshResponse(BaseModel):
+    """Response after cleaning mesh topology and recalculating normals."""
+    name: str
+    verts_before: int
+    verts_after: int
+    merged_vertices: int
+    normals_recalculated: bool
+    message: str
+
+
+

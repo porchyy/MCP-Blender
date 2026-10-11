@@ -67,6 +67,10 @@ def test_mcp_server_stdio_initialization_and_tool_call():
         assert "get_object_details" in tool_names
         assert "list_scene_collections" in tool_names
         assert "inspect_mesh" in tool_names
+        assert "apply_transforms" in tool_names
+        assert "set_origin_to_bottom" in tool_names
+        assert "clean_mesh" in tool_names
+
 
 
 

@@ -182,3 +182,69 @@ def test_bridge_client_inspect_mesh_success():
         assert res.data["validation"]["is_watertight"] is True
 
 
+def test_bridge_client_apply_transforms_success():
+    """Client successfully sends apply_transforms."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "name": "Cube",
+            "applied": {"location": False, "rotation": True, "scale": True},
+            "transforms_before": {"scale": [2.0, 2.0, 2.0]},
+            "transforms_after": {"scale": [1.0, 1.0, 1.0]},
+            "message": "Transforms applied successfully",
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.apply_transforms("Cube", location=False, rotation=True, scale=True)
+        assert res.status == "ok"
+        assert res.data["applied"]["rotation"] is True
+
+
+def test_bridge_client_set_origin_to_bottom_success():
+    """Client successfully sends set_origin_to_bottom."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "name": "Cube",
+            "origin_type": "BOTTOM_CENTER",
+            "delta_applied": [0.0, 0.0, -1.0],
+            "location_before": [0.0, 0.0, 0.0],
+            "location_after": [0.0, 0.0, -1.0],
+            "message": "Origin set to bottom center successfully",
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.set_origin_to_bottom("Cube")
+        assert res.status == "ok"
+        assert res.data["origin_type"] == "BOTTOM_CENTER"
+
+
+def test_bridge_client_clean_mesh_success():
+    """Client successfully sends clean_mesh."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "name": "Cube",
+            "verts_before": 10,
+            "verts_after": 8,
+            "merged_vertices": 2,
+            "normals_recalculated": True,
+            "message": "Cleaned mesh",
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.clean_mesh("Cube", merge_distance=0.001, recalculate_normals=True)
+        assert res.status == "ok"
+        assert res.data["merged_vertices"] == 2
+
+
+

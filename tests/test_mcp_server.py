@@ -227,3 +227,72 @@ def test_inspect_mesh_tool_offline():
         assert "unavailable" in parsed["error"]
 
 
+def test_apply_transforms_tool():
+    """Tool returns ApplyTransformsResponse when online."""
+    from mcp_server.server import apply_transforms
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.apply_transforms") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "name": "Cube",
+                "applied": {"location": False, "rotation": True, "scale": True},
+                "transforms_before": {"scale": [2.0, 2.0, 2.0]},
+                "transforms_after": {"scale": [1.0, 1.0, 1.0]},
+                "message": "Transforms applied successfully",
+            },
+        )
+        res_json = apply_transforms("Cube", rotation=True, scale=True)
+        parsed = json.loads(res_json)
+        assert parsed["name"] == "Cube"
+        assert parsed["applied"]["rotation"] is True
+
+
+def test_set_origin_to_bottom_tool():
+    """Tool returns SetOriginResponse when online."""
+    from mcp_server.server import set_origin_to_bottom
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.set_origin_to_bottom") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "name": "Cube",
+                "origin_type": "BOTTOM_CENTER",
+                "delta_applied": [0.0, 0.0, -1.0],
+                "location_before": [0.0, 0.0, 0.0],
+                "location_after": [0.0, 0.0, -1.0],
+                "message": "Origin set successfully",
+            },
+        )
+        res_json = set_origin_to_bottom("Cube")
+        parsed = json.loads(res_json)
+        assert parsed["name"] == "Cube"
+        assert parsed["origin_type"] == "BOTTOM_CENTER"
+
+
+def test_clean_mesh_tool():
+    """Tool returns CleanMeshResponse when online."""
+    from mcp_server.server import clean_mesh
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.clean_mesh") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "name": "Cube",
+                "verts_before": 10,
+                "verts_after": 8,
+                "merged_vertices": 2,
+                "normals_recalculated": True,
+                "message": "Cleaned mesh",
+            },
+        )
+        res_json = clean_mesh("Cube", merge_distance=0.001, recalculate_normals=True)
+        parsed = json.loads(res_json)
+        assert parsed["name"] == "Cube"
+        assert parsed["merged_vertices"] == 2
+
+
+

@@ -425,3 +425,122 @@ def test_inspect_mesh_invalid_input():
         execute_action("inspect_mesh", {"object_name": "a" * 257})
 
 
+def test_apply_transforms_success():
+    """Applying transforms invokes bpy operator on active object."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+    mock_obj = MagicMock()
+    mock_obj.name = "Cube"
+    mock_obj.location = [1.0, 2.0, 3.0]
+    mock_obj.rotation_euler = [0.5, 0.5, 0.5]
+    mock_obj.scale = [2.0, 2.0, 2.0]
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "Cube" else None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+        result = execute_action("apply_transforms", {"object_name": "Cube", "rotation": True, "scale": True, "location": False})
+
+        assert result["name"] == "Cube"
+        assert result["applied"]["rotation"] is True
+        assert result["applied"]["scale"] is True
+        assert result["applied"]["location"] is False
+        assert mock_bpy.ops.object.transform_apply.called
+
+
+def test_apply_transforms_no_channels_error():
+    """Error raised when no transform channel is selected."""
+    from blender_addon.handlers import execute_action
+    with pytest.raises(ValueError, match="At least one transform channel"):
+        execute_action("apply_transforms", {"object_name": "Cube", "location": False, "rotation": False, "scale": False})
+
+
+def test_set_origin_to_bottom_success():
+    """Origin is calculated to bottom center of bounding box."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+    mock_obj = MagicMock()
+    mock_obj.name = "Cube"
+    mock_obj.type = "MESH"
+    mock_obj.location = [0.0, 0.0, 0.0]
+    mock_obj.bound_box = [
+        [-1.0, -1.0, -1.0],
+        [1.0, -1.0, -1.0],
+        [1.0, 1.0, -1.0],
+        [-1.0, 1.0, -1.0],
+        [-1.0, -1.0, 1.0],
+        [1.0, -1.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [-1.0, 1.0, 1.0],
+    ]
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "Cube" else None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+        result = execute_action("set_origin_to_bottom", {"object_name": "Cube"})
+
+        assert result["name"] == "Cube"
+        assert result["origin_type"] == "BOTTOM_CENTER"
+        assert result["delta_applied"] == [0.0, 0.0, -1.0]
+
+
+def test_set_origin_to_bottom_non_mesh_error():
+    """Non-mesh object raises ValueError."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+    mock_obj = MagicMock()
+    mock_obj.name = "Camera"
+    mock_obj.type = "CAMERA"
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "Camera" else None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+        with pytest.raises(ValueError, match="requires a MESH"):
+            execute_action("set_origin_to_bottom", {"object_name": "Camera"})
+
+
+def test_clean_mesh_success():
+    """Clean mesh merges duplicates and recalculates normals."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+    mock_obj = MagicMock()
+    mock_obj.name = "Cube"
+    mock_obj.type = "MESH"
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "Cube" else None
+
+    mock_bmesh = MagicMock()
+    mock_bm = MagicMock()
+    mock_bm.verts = [1] * 10
+    mock_bm.faces = [1, 2, 3, 4, 5, 6]
+
+    def remove_doubles_side_effect(bm, verts=None, dist=0.0):
+        mock_bm.verts = [1] * 8
+
+    mock_bmesh.ops.remove_doubles.side_effect = remove_doubles_side_effect
+    mock_bmesh.new.return_value = mock_bm
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        mp.setitem(sys.modules, "bmesh", mock_bmesh)
+        from blender_addon.handlers import execute_action
+        result = execute_action("clean_mesh", {"object_name": "Cube", "merge_distance": 0.001, "recalculate_normals": True})
+
+        assert result["name"] == "Cube"
+        assert result["verts_before"] == 10
+        assert result["verts_after"] == 8
+        assert result["merged_vertices"] == 2
+        assert result["normals_recalculated"] is True
+        assert mock_bm.to_mesh.called
+        assert mock_bm.free.called
+
+
+def test_reload_addon():
+    """Reload addon returns reloaded status."""
+    from blender_addon.handlers import execute_action
+    res = execute_action("reload_addon")
+    assert res["status"] == "reloaded"
+
+
+

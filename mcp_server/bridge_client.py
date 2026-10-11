@@ -91,4 +91,43 @@ class BlenderBridgeClient:
         """Inspect and validate mesh geometry and topology for an object."""
         return self.send_action("inspect_mesh", {"object_name": object_name})
 
+    def apply_transforms(
+        self,
+        object_name: str,
+        location: bool = False,
+        rotation: bool = True,
+        scale: bool = True,
+    ) -> BridgeActionResponse:
+        """Freeze/apply transforms on an object."""
+        return self.send_action(
+            "apply_transforms",
+            {
+                "object_name": object_name,
+                "location": location,
+                "rotation": rotation,
+                "scale": scale,
+            },
+        )
+
+    def set_origin_to_bottom(self, object_name: str) -> BridgeActionResponse:
+        """Adjust object origin/pivot to bottom-center of bounding box."""
+        return self.send_action("set_origin_to_bottom", {"object_name": object_name})
+
+    def clean_mesh(
+        self,
+        object_name: str,
+        merge_distance: float = 0.0001,
+        recalculate_normals: bool = True,
+    ) -> BridgeActionResponse:
+        """Merge duplicate vertices and recalculate normals."""
+        return self.send_action(
+            "clean_mesh",
+            {
+                "object_name": object_name,
+                "merge_distance": merge_distance,
+                "recalculate_normals": recalculate_normals,
+            },
+        )
+
+
 
