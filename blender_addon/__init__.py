@@ -10,9 +10,20 @@ bl_info = {
 }
 
 from . import handlers
+from . import bridge_server
+from . import ui
+
 
 def register():
-    pass
+    """Register addon components."""
+    ui.register_ui()
+
 
 def unregister():
-    pass
+    """Unregister addon components and stop running server cleanly."""
+    bridge_server.stop_server()
+    ui.unregister_ui()
+
+
+if __name__ == "__main__":
+    register()
