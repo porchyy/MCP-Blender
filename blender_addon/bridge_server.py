@@ -5,8 +5,10 @@ from typing import Optional
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 try:
     from .handlers import execute_action
+    from .dispatcher import run_on_main_thread
 except ImportError:
     from blender_addon.handlers import execute_action
+    from blender_addon.dispatcher import run_on_main_thread
 
 _server_instance: Optional[ThreadingHTTPServer] = None
 _server_thread: Optional[threading.Thread] = None
@@ -57,10 +59,12 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"status": "error", "error": "Missing or invalid 'action' field"})
                 return
 
-            result = execute_action(action, params)
+            result = run_on_main_thread(execute_action, action, params, timeout=5.0)
             self._send_json(200, {"status": "ok", "data": result})
         except ValueError as err:
             self._send_json(400, {"status": "error", "error": str(err)})
+        except TimeoutError as err:
+            self._send_json(504, {"status": "error", "error": str(err)})
         except Exception as exc:
             self._send_json(500, {"status": "error", "error": f"Internal error: {str(exc)}"})
 

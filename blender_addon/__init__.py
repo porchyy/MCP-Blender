@@ -11,12 +11,17 @@ bl_info = {
 
 from . import handlers
 from . import bridge_server
+from . import dispatcher
 from . import ui
 
 
 def register():
-    """Register addon components."""
+    """Register addon components and start bridge server."""
     ui.register_ui()
+    try:
+        bridge_server.start_server()
+    except Exception as exc:
+        print(f"[Blender Asset Prep] Note: Auto-start bridge server deferred: {exc}")
 
 
 def unregister():
