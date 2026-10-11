@@ -543,4 +543,87 @@ def test_reload_addon():
     assert res["status"] == "reloaded"
 
 
+def test_set_origin_to_bottom_world_space_invariance():
+    """Verify that world-space vertex positions remain invariant when origin moves to bottom."""
+    mock_bpy = MagicMock()
+    mock_bpy.context.scene.name = "Scene"
+
+    initial_local_verts = [
+        [-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [1.0, 1.0, -1.0], [-1.0, 1.0, -1.0],
+        [-1.0, -1.0, 1.0], [1.0, -1.0, 1.0], [1.0, 1.0, 1.0], [-1.0, 1.0, 1.0]
+    ]
+    current_verts = [list(v) for v in initial_local_verts]
+
+    mock_obj = MagicMock()
+    mock_obj.name = "Cube"
+    mock_obj.type = "MESH"
+    mock_obj.location = [0.0, 0.0, 0.0]
+    mock_obj.bound_box = [list(v) for v in initial_local_verts]
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "Cube" else None
+
+    class FakeVector(list):
+        def __init__(self, seq):
+            super().__init__(seq)
+            self.x, self.y, self.z = seq[0], seq[1], seq[2]
+        def __getitem__(self, idx):
+            return super().__getitem__(idx)
+        def __neg__(self):
+            return FakeVector([-x for x in self])
+
+    class FakeMatrix:
+        def __init__(self, translation_vec):
+            self.translation_vec = translation_vec
+        @staticmethod
+        def Translation(vec):
+            return FakeMatrix(vec)
+        def to_3x3(self):
+            return self
+        def __matmul__(self, other):
+            return list(other)
+
+    def fake_transform(mat):
+        for v in current_verts:
+            v[0] += mat.translation_vec[0]
+            v[1] += mat.translation_vec[1]
+            v[2] += mat.translation_vec[2]
+
+    def fake_loc_add(delta):
+        mock_obj.location[0] += delta[0]
+        mock_obj.location[1] += delta[1]
+        mock_obj.location[2] += delta[2]
+
+    mock_obj.data.transform.side_effect = fake_transform
+    mock_obj.matrix_world = FakeMatrix([0, 0, 0])
+
+    # Allow += on mock_obj.location
+    class LocWrapper(list):
+        def __iadd__(self, other):
+            self[0] += other[0]
+            self[1] += other[1]
+            self[2] += other[2]
+            return self
+
+    mock_obj.location = LocWrapper([0.0, 0.0, 0.0])
+
+    mock_mathutils = MagicMock()
+    mock_mathutils.Vector = FakeVector
+    mock_mathutils.Matrix = FakeMatrix
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        mp.setitem(sys.modules, "mathutils", mock_mathutils)
+        from blender_addon.handlers import execute_action
+
+        world_verts_before = [[mock_obj.location[i] + v[i] for i in range(3)] for v in current_verts]
+        res = execute_action("set_origin_to_bottom", {"object_name": "Cube"})
+
+        assert res["location_before"] == [0.0, 0.0, 0.0]
+        assert res["location_after"] == [0.0, 0.0, -1.0]
+
+        world_verts_after = [[round(mock_obj.location[i] + v[i], 5) for i in range(3)] for v in current_verts]
+        # World space vertex positions are 100% invariant
+        assert world_verts_after == world_verts_before
+
+
+
 
