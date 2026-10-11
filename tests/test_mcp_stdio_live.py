@@ -63,6 +63,10 @@ def test_mcp_server_stdio_initialization_and_tool_call():
         tools = tools_resp.get("result", {}).get("tools", [])
         tool_names = [t.get("name") for t in tools]
         assert "get_blender_status" in tool_names
+        assert "list_scene_objects" in tool_names
+        assert "get_object_details" in tool_names
+        assert "list_scene_collections" in tool_names
+
 
         # 4. Request tools/call for get_blender_status
         call_req = {
@@ -153,6 +157,21 @@ def test_mcp_server_stdio_with_live_bridge_server():
         assert status_data["connected"] is True
         assert status_data["api_version"] == "1.0.0"
         assert "blender_version" in status_data
+
+        # 3. Call list_scene_objects
+        proc.stdin.write(json.dumps({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "list_scene_objects", "arguments": {"limit": 10}},
+        }) + "\n")
+        proc.stdin.flush()
+
+        call_resp2 = json.loads(proc.stdout.readline())
+        raw_text2 = call_resp2["result"]["content"][0]["text"]
+        objects_data = json.loads(raw_text2)
+        assert "scene_name" in objects_data
+        assert "objects" in objects_data
     finally:
         proc.terminate()
         try:
@@ -160,4 +179,5 @@ def test_mcp_server_stdio_with_live_bridge_server():
         except subprocess.TimeoutExpired:
             proc.kill()
         stop_server()
+
 

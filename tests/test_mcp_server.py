@@ -41,3 +41,130 @@ def test_get_blender_status_tool_online():
         assert parsed["blender_version"] == "5.2.2"
         assert parsed["scene_name"] == "MainScene"
         assert parsed["objects_count"] == 5
+
+
+def test_list_scene_objects_tool_offline():
+    """Tool returns error json when bridge is offline."""
+    from mcp_server.server import list_scene_objects
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.list_scene_objects") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="error",
+            error="Blender bridge unavailable at 127.0.0.1:9876",
+        )
+        res_json = list_scene_objects()
+        parsed = json.loads(res_json)
+        assert parsed["status"] == "error"
+        assert "unavailable" in parsed["error"]
+
+
+def test_list_scene_objects_tool_online():
+    """Tool returns serialized SceneObjectsResponse when bridge is online."""
+    from mcp_server.server import list_scene_objects
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.list_scene_objects") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "scene_name": "Scene",
+                "total_count": 1,
+                "limit": 100,
+                "offset": 0,
+                "objects": [
+                    {
+                        "name": "Cube",
+                        "type": "MESH",
+                        "location": [0.0, 0.0, 0.0],
+                        "rotation_euler": [0.0, 0.0, 0.0],
+                        "scale": [1.0, 1.0, 1.0],
+                        "collections": ["Collection"],
+                    }
+                ],
+            },
+        )
+        res_json = list_scene_objects()
+        parsed = json.loads(res_json)
+        assert parsed["scene_name"] == "Scene"
+        assert parsed["total_count"] == 1
+        assert parsed["objects"][0]["name"] == "Cube"
+
+
+def test_get_object_details_tool_not_found():
+    """Tool returns error json when object does not exist."""
+    from mcp_server.server import get_object_details
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.get_object_details") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="error",
+            error="Object 'NonExistent' not found in active scene 'Scene'",
+        )
+        res_json = get_object_details("NonExistent")
+        parsed = json.loads(res_json)
+        assert parsed["status"] == "error"
+        assert "not found" in parsed["error"]
+
+
+def test_get_object_details_tool_found():
+    """Tool returns detailed object properties when object exists."""
+    from mcp_server.server import get_object_details
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.get_object_details") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "name": "Cube",
+                "type": "MESH",
+                "location": [1.0, 2.0, 3.0],
+                "rotation_euler": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+                "dimensions": [2.0, 2.0, 2.0],
+                "collections": ["Collection"],
+                "visible": True,
+                "parent": None,
+                "data_name": "Cube",
+                "material_slots": ["Mat"],
+                "mesh_info": {"vertex_count": 8, "polygon_count": 6, "edge_count": 12},
+            },
+        )
+        res_json = get_object_details("Cube")
+        parsed = json.loads(res_json)
+        assert parsed["name"] == "Cube"
+        assert parsed["mesh_info"]["vertex_count"] == 8
+
+
+def test_list_scene_collections_tool():
+    """Tool returns collection hierarchy JSON."""
+    from mcp_server.server import list_scene_collections
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.list_scene_collections") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "scene_name": "Scene",
+                "master_collection": {
+                    "name": "Scene Collection",
+                    "parent": None,
+                    "objects": ["Cam"],
+                    "children": ["Collection"],
+                },
+                "collections": [
+                    {
+                        "name": "Collection",
+                        "parent": "Scene Collection",
+                        "objects": ["Cube"],
+                        "children": [],
+                    }
+                ],
+            },
+        )
+        res_json = list_scene_collections()
+        parsed = json.loads(res_json)
+        assert parsed["scene_name"] == "Scene"
+        assert parsed["master_collection"]["name"] == "Scene Collection"
+        assert len(parsed["collections"]) == 1
+

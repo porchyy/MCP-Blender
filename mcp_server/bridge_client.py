@@ -74,3 +74,16 @@ class BlenderBridgeClient:
             objects_count=None,
             message=res.error or "Failed to connect to Blender",
         )
+
+    def list_scene_objects(self, limit: int = 100, offset: int = 0) -> BridgeActionResponse:
+        """Query all objects in the active scene with pagination."""
+        return self.send_action("list_scene_objects", {"limit": limit, "offset": offset})
+
+    def get_object_details(self, object_name: str) -> BridgeActionResponse:
+        """Query detailed metrics and transforms of a single object."""
+        return self.send_action("get_object_details", {"object_name": object_name})
+
+    def list_scene_collections(self) -> BridgeActionResponse:
+        """Query collection hierarchy and membership in the active scene."""
+        return self.send_action("list_scene_collections", {})
+

@@ -47,3 +47,96 @@ def test_bridge_client_success_returns_status():
         assert status.scene_name == "Scene"
         assert status.objects_count == 3
         assert status.message == "Blender is ready"
+
+
+def test_bridge_client_list_scene_objects_success():
+    """Client successfully sends list_scene_objects and receives data."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "scene_name": "Scene",
+            "total_count": 1,
+            "limit": 100,
+            "offset": 0,
+            "objects": [
+                {
+                    "name": "Cube",
+                    "type": "MESH",
+                    "location": [0.0, 0.0, 0.0],
+                    "rotation_euler": [0.0, 0.0, 0.0],
+                    "scale": [1.0, 1.0, 1.0],
+                    "collections": ["Collection"],
+                }
+            ],
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.list_scene_objects(limit=50, offset=0)
+        assert res.status == "ok"
+        assert res.data["scene_name"] == "Scene"
+        assert len(res.data["objects"]) == 1
+
+
+def test_bridge_client_get_object_details_success():
+    """Client successfully sends get_object_details and receives object data."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "name": "Cube",
+            "type": "MESH",
+            "location": [0.0, 0.0, 0.0],
+            "rotation_euler": [0.0, 0.0, 0.0],
+            "scale": [1.0, 1.0, 1.0],
+            "dimensions": [2.0, 2.0, 2.0],
+            "collections": ["Collection"],
+            "visible": True,
+            "parent": None,
+            "data_name": "Cube",
+            "material_slots": [],
+            "mesh_info": {"vertex_count": 8, "polygon_count": 6, "edge_count": 12},
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.get_object_details("Cube")
+        assert res.status == "ok"
+        assert res.data["name"] == "Cube"
+        assert res.data["mesh_info"]["vertex_count"] == 8
+
+
+def test_bridge_client_list_scene_collections_success():
+    """Client successfully sends list_scene_collections and receives hierarchy."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {
+        "status": "ok",
+        "data": {
+            "scene_name": "Scene",
+            "master_collection": {
+                "name": "Scene Collection",
+                "parent": None,
+                "objects": ["Cam"],
+                "children": ["Collection"],
+            },
+            "collections": [
+                {
+                    "name": "Collection",
+                    "parent": "Scene Collection",
+                    "objects": ["Cube"],
+                    "children": [],
+                }
+            ],
+        },
+    }
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.list_scene_collections()
+        assert res.status == "ok"
+        assert res.data["master_collection"]["name"] == "Scene Collection"
+        assert len(res.data["collections"]) == 1
+
