@@ -1,6 +1,6 @@
 [project]
 name = "blender-asset-prep-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP Server connecting Google Antigravity to Blender"
 requires-python = ">=3.10"
 dependencies = [

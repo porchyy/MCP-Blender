@@ -106,6 +106,7 @@ class MeshInspectionResponse(BaseModel):
     polygon_count: Optional[int] = Field(None, description="Total polygons/faces count")
     dimensions: list[float] = Field(..., description="Bounding box dimensions [X, Y, Z]")
     transform: Dict[str, list[float]] = Field(..., description="Transforms: location, rotation_euler, scale")
+    world_bounds: Optional[Dict[str, list[float]]] = Field(None, description="Bounding box min/max in World Space")
     validation: Optional[MeshValidationSummary] = Field(None, description="Validation summary if MESH")
     message: str = Field("", description="Status notes or explanation")
 

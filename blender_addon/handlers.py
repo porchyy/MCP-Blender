@@ -311,6 +311,19 @@ def handle_inspect_mesh(params: Optional[Dict[str, Any]] = None) -> Dict[str, An
         "scale": [round(float(v), 5) for v in getattr(target_obj, "scale", (1.0, 1.0, 1.0))],
     }
 
+    world_bounds = None
+    bound_box = getattr(target_obj, "bound_box", None)
+    if bound_box is not None and hasattr(target_obj, "matrix_world"):
+        try:
+            import mathutils
+            pts = [target_obj.matrix_world @ mathutils.Vector(p) for p in bound_box]
+            world_bounds = {
+                "min": [round(float(min(p[0] for p in pts)), 5), round(float(min(p[1] for p in pts)), 5), round(float(min(p[2] for p in pts)), 5)],
+                "max": [round(float(max(p[0] for p in pts)), 5), round(float(max(p[1] for p in pts)), 5), round(float(max(p[2] for p in pts)), 5)],
+            }
+        except Exception:
+            world_bounds = None
+
     if obj_type != "MESH":
         return {
             "name": target_obj.name,
@@ -322,6 +335,7 @@ def handle_inspect_mesh(params: Optional[Dict[str, Any]] = None) -> Dict[str, An
             "polygon_count": None,
             "dimensions": dims,
             "transform": transform,
+            "world_bounds": world_bounds,
             "validation": None,
             "message": f"Object '{target_obj.name}' is of type '{obj_type}', not a MESH",
         }
@@ -338,6 +352,7 @@ def handle_inspect_mesh(params: Optional[Dict[str, Any]] = None) -> Dict[str, An
             "polygon_count": 0,
             "dimensions": dims,
             "transform": transform,
+            "world_bounds": world_bounds,
             "validation": {
                 "status": "empty",
                 "is_watertight": False,
@@ -363,6 +378,7 @@ def handle_inspect_mesh(params: Optional[Dict[str, Any]] = None) -> Dict[str, An
             "polygon_count": 0,
             "dimensions": dims,
             "transform": transform,
+            "world_bounds": world_bounds,
             "validation": {
                 "status": "empty",
                 "is_watertight": False,
@@ -465,6 +481,7 @@ def handle_inspect_mesh(params: Optional[Dict[str, Any]] = None) -> Dict[str, An
         "polygon_count": p_count,
         "dimensions": dims,
         "transform": transform,
+        "world_bounds": world_bounds,
         "validation": validation,
         "message": f"Mesh inspection complete ({validation['status']})",
     }
