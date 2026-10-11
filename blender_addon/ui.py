@@ -1,6 +1,9 @@
 """Blender 3D Viewport sidebar UI panel and operators for MCP Bridge."""
 import sys
-from blender_addon.bridge_server import start_server, stop_server, is_server_running, get_server_port
+try:
+    from .bridge_server import start_server, stop_server, is_server_running, get_server_port
+except ImportError:
+    from blender_addon.bridge_server import start_server, stop_server, is_server_running, get_server_port
 
 try:
     import bpy  # type: ignore

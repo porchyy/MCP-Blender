@@ -2,8 +2,10 @@
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Optional
-from blender_addon.handlers import execute_action
+try:
+    from .handlers import execute_action
+except ImportError:
+    from blender_addon.handlers import execute_action
 
 _server_instance: Optional[ThreadingHTTPServer] = None
 _server_thread: Optional[threading.Thread] = None
