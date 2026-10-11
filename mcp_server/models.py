@@ -156,5 +156,49 @@ class BatchOperationResponse(BaseModel):
     results: list[BatchItemResult]
 
 
+class CreatePrimitiveResponse(BaseModel):
+    """Response after creating a 3D primitive."""
+    name: str
+    primitive_type: str
+    location: list[float]
+    rotation_euler: list[float]
+    scale: list[float]
+    dimensions: list[float]
+    message: str
+
+
+class DeleteObjectResponse(BaseModel):
+    """Response after deleting an object."""
+    name: str
+    deleted: bool
+    message: str
+
+
+class SetObjectParentResponse(BaseModel):
+    """Response after parenting an object."""
+    child_name: str
+    parent_name: Optional[str] = None
+    keep_transform: bool = True
+    message: str
+
+
+class CreateMaterialResponse(BaseModel):
+    """Response after creating a Principled BSDF material."""
+    material_name: str
+    base_color: list[float]
+    roughness: float
+    metallic: float
+    message: str
+
+
+class AssignMaterialResponse(BaseModel):
+    """Response after assigning a material to an object."""
+    object_name: str
+    material_name: str
+    slot_index: int
+    message: str
+
+
+
 
 

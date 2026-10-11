@@ -761,6 +761,145 @@ def test_batch_operations_input_validation():
         execute_action("batch_inspect_mesh", {"object_names": too_many})
 
 
+def test_create_primitive_success_and_invalid_type():
+    """Create primitive adds object via ops.mesh and configures transforms."""
+    mock_bpy = MagicMock()
+    mock_active = MagicMock()
+    mock_active.name = "CustomBox"
+    mock_active.location = (1.0, 2.0, 3.0)
+    mock_active.rotation_euler = (0.0, 0.0, 0.0)
+    mock_active.scale = (1.0, 1.0, 1.0)
+    mock_active.dimensions = (2.0, 2.0, 2.0)
+    mock_bpy.context.active_object = mock_active
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+
+        res = execute_action("create_primitive", {
+            "primitive_type": "CUBE",
+            "name": "CustomBox",
+            "location": [1.0, 2.0, 3.0]
+        })
+        assert res["name"] == "CustomBox"
+        assert res["primitive_type"] == "CUBE"
+        assert mock_bpy.ops.mesh.primitive_cube_add.called
+
+        # Test invalid type raises ValueError
+        with pytest.raises(ValueError, match="Unsupported primitive type"):
+            execute_action("create_primitive", {"primitive_type": "DONUT"})
+
+
+def test_delete_object_success_and_not_found():
+    """Delete object removes target from bpy.data.objects."""
+    mock_bpy = MagicMock()
+    mock_obj = MagicMock()
+    mock_obj.name = "TrashCube"
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "TrashCube" else None
+    mock_bpy.data.objects.get.side_effect = lambda n: mock_obj if n == "TrashCube" else None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+
+        res = execute_action("delete_object", {"object_name": "TrashCube"})
+        assert res["name"] == "TrashCube"
+        assert res["deleted"] is True
+        assert mock_bpy.data.objects.remove.called
+
+        # Test missing object
+        with pytest.raises(ValueError, match="Object 'Ghost' not found"):
+            execute_action("delete_object", {"object_name": "Ghost"})
+
+
+def test_set_object_parent_success_and_errors():
+    """Parenting links child to parent, supports unparenting and prevents self-parenting."""
+    mock_bpy = MagicMock()
+    child = MagicMock(name="Child")
+    child.name = "Child"
+    parent = MagicMock(name="Parent")
+    parent.name = "Parent"
+
+    objects_map = {"Child": child, "Parent": parent}
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: objects_map.get(n)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+
+        # Set parent
+        res = execute_action("set_object_parent", {"child_name": "Child", "parent_name": "Parent"})
+        assert res["child_name"] == "Child"
+        assert res["parent_name"] == "Parent"
+        assert child.parent == parent
+
+        # Unparent
+        res_un = execute_action("set_object_parent", {"child_name": "Child", "parent_name": ""})
+        assert res_un["parent_name"] is None
+        assert child.parent is None
+
+        # Self-parent error
+        with pytest.raises(ValueError, match="cannot be parented to itself"):
+            execute_action("set_object_parent", {"child_name": "Child", "parent_name": "Child"})
+
+
+def test_create_material_and_assign_material():
+    """Create material configures Principled BSDF nodes and assign material attaches to mesh."""
+    mock_bpy = MagicMock()
+    mock_mat = MagicMock()
+    mock_mat.name = "WoodMat"
+    mock_node = MagicMock()
+
+    base_color_input = MagicMock()
+    roughness_input = MagicMock()
+    metallic_input = MagicMock()
+    inputs_dict = {
+        "Base Color": base_color_input,
+        "Roughness": roughness_input,
+        "Metallic": metallic_input,
+    }
+    mock_node.inputs.__contains__.side_effect = lambda k: k in inputs_dict
+    mock_node.inputs.__getitem__.side_effect = lambda k: inputs_dict[k]
+
+    mock_mat.node_tree.nodes.get.return_value = mock_node
+    mock_bpy.data.materials.get.return_value = None
+    mock_bpy.data.materials.new.return_value = mock_mat
+
+    mock_obj = MagicMock()
+    mock_obj.name = "Chest"
+    mock_obj.data.materials = []
+    mock_bpy.context.scene.objects.get.side_effect = lambda n: mock_obj if n == "Chest" else None
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+
+        # Create Material
+        mat_res = execute_action("create_material", {
+            "material_name": "WoodMat",
+            "base_color": [0.6, 0.3, 0.1, 1.0],
+            "roughness": 0.8,
+            "metallic": 0.1
+        })
+        assert mat_res["material_name"] == "WoodMat"
+        assert mat_res["roughness"] == 0.8
+        assert base_color_input.default_value == (0.6, 0.3, 0.1, 1.0)
+        assert roughness_input.default_value == 0.8
+        assert metallic_input.default_value == 0.1
+
+        # Assign Material
+        mock_bpy.data.materials.get.side_effect = lambda n: mock_mat if n == "WoodMat" else None
+        assign_res = execute_action("assign_material", {
+            "object_name": "Chest",
+            "material_name": "WoodMat"
+        })
+        assert assign_res["object_name"] == "Chest"
+        assert assign_res["material_name"] == "WoodMat"
+        assert len(mock_obj.data.materials) == 1
+
+
+
+
 
 
 

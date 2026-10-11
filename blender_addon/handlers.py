@@ -773,6 +773,249 @@ def handle_batch_set_origin_to_bottom(params: Optional[Dict[str, Any]] = None) -
     return _run_batch_operation(params, handle_set_origin_to_bottom)
 
 
+def handle_create_primitive(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Create a 3D mesh primitive (CUBE, CYLINDER, UV_SPHERE, PLANE)."""
+    params = params or {}
+    ptype = str(params.get("primitive_type", "CUBE")).upper().strip()
+    name = params.get("name")
+    loc = [float(v) for v in params.get("location", [0.0, 0.0, 0.0])[:3]]
+    rot = [float(v) for v in params.get("rotation_euler", [0.0, 0.0, 0.0])[:3]]
+    scale = [float(v) for v in params.get("scale", [1.0, 1.0, 1.0])[:3]]
+    dims = params.get("dimensions")
+
+    bpy_module = _get_bpy()
+    if bpy_module is None:
+        raise RuntimeError("bpy module not found (standalone mode)")
+
+    if hasattr(bpy_module.context, "selected_objects"):
+        for o in list(bpy_module.context.selected_objects):
+            if hasattr(o, "select_set"):
+                o.select_set(False)
+
+    ops = getattr(getattr(bpy_module, "ops", None), "mesh", None)
+    if not ops:
+        raise RuntimeError("bpy.ops.mesh not available")
+
+    if ptype == "CUBE":
+        ops.primitive_cube_add(location=loc, rotation=rot, scale=scale)
+    elif ptype == "CYLINDER":
+        ops.primitive_cylinder_add(location=loc, rotation=rot, scale=scale)
+    elif ptype in ("UV_SPHERE", "SPHERE"):
+        ops.primitive_uv_sphere_add(location=loc, rotation=rot, scale=scale)
+    elif ptype == "PLANE":
+        ops.primitive_plane_add(location=loc, rotation=rot, scale=scale)
+    else:
+        raise ValueError(f"Unsupported primitive type '{ptype}'. Supported: CUBE, CYLINDER, UV_SPHERE, PLANE")
+
+    active_obj = getattr(bpy_module.context, "active_object", None)
+    if active_obj is None and hasattr(bpy_module.context, "view_layer") and hasattr(bpy_module.context.view_layer, "objects"):
+        active_obj = bpy_module.context.view_layer.objects.active
+
+    if active_obj is None:
+        raise RuntimeError("Failed to obtain active object after primitive creation")
+
+    if name and isinstance(name, str) and name.strip():
+        active_obj.name = name.strip()
+
+    if dims and isinstance(dims, (list, tuple)) and len(dims) == 3:
+        active_obj.dimensions = tuple(float(v) for v in dims)
+
+    return {
+        "name": active_obj.name,
+        "primitive_type": ptype,
+        "location": [round(float(v), 5) for v in getattr(active_obj, "location", (0.0, 0.0, 0.0))],
+        "rotation_euler": [round(float(v), 5) for v in getattr(active_obj, "rotation_euler", (0.0, 0.0, 0.0))],
+        "scale": [round(float(v), 5) for v in getattr(active_obj, "scale", (1.0, 1.0, 1.0))],
+        "dimensions": [round(float(v), 5) for v in getattr(active_obj, "dimensions", (0.0, 0.0, 0.0))],
+        "message": f"Primitive '{ptype}' created successfully as '{active_obj.name}'",
+    }
+
+
+def handle_delete_object(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Safely delete an object from the active scene and data."""
+    params = params or {}
+    object_name = params.get("object_name")
+    if not object_name or not isinstance(object_name, str) or not object_name.strip():
+        raise ValueError("Parameter 'object_name' is required and must be a non-empty string")
+    object_name = object_name.strip()
+
+    bpy_module = _get_bpy()
+    if bpy_module is None:
+        raise RuntimeError("bpy module not found (standalone mode)")
+
+    scene = getattr(bpy_module.context, "scene", None)
+    target_obj = None
+    if scene and hasattr(scene, "objects"):
+        target_obj = scene.objects.get(object_name)
+    if target_obj is None and hasattr(bpy_module, "data") and hasattr(bpy_module.data, "objects"):
+        target_obj = bpy_module.data.objects.get(object_name)
+
+    if target_obj is None:
+        raise ValueError(f"Object '{object_name}' not found")
+
+    if hasattr(bpy_module.data, "objects") and hasattr(bpy_module.data.objects, "remove"):
+        bpy_module.data.objects.remove(target_obj, do_unlink=True)
+
+    return {
+        "name": object_name,
+        "deleted": True,
+        "message": f"Object '{object_name}' deleted successfully",
+    }
+
+
+def handle_set_object_parent(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Set or clear parent-child hierarchy relationship between objects."""
+    params = params or {}
+    child_name = params.get("child_name")
+    parent_name = params.get("parent_name")
+    keep_transform = bool(params.get("keep_transform", True))
+
+    if not child_name or not isinstance(child_name, str) or not child_name.strip():
+        raise ValueError("Parameter 'child_name' is required and must be a non-empty string")
+    child_name = child_name.strip()
+
+    bpy_module = _get_bpy()
+    if bpy_module is None:
+        raise RuntimeError("bpy module not found (standalone mode)")
+
+    scene = getattr(bpy_module.context, "scene", None)
+    child_obj = scene.objects.get(child_name) if scene and hasattr(scene, "objects") else None
+    if child_obj is None and hasattr(bpy_module, "data") and hasattr(bpy_module.data, "objects"):
+        child_obj = bpy_module.data.objects.get(child_name)
+
+    if child_obj is None:
+        raise ValueError(f"Child object '{child_name}' not found")
+
+    if not parent_name:
+        child_obj.parent = None
+        return {
+            "child_name": child_obj.name,
+            "parent_name": None,
+            "message": f"Unparented '{child_obj.name}' successfully",
+        }
+
+    parent_name = str(parent_name).strip()
+    parent_obj = scene.objects.get(parent_name) if scene and hasattr(scene, "objects") else None
+    if parent_obj is None and hasattr(bpy_module, "data") and hasattr(bpy_module.data, "objects"):
+        parent_obj = bpy_module.data.objects.get(parent_name)
+
+    if parent_obj is None:
+        raise ValueError(f"Parent object '{parent_name}' not found")
+
+    if child_obj == parent_obj:
+        raise ValueError("An object cannot be parented to itself")
+
+    if keep_transform and hasattr(child_obj, "matrix_world") and hasattr(parent_obj, "matrix_world"):
+        matrix_world = child_obj.matrix_world.copy()
+        child_obj.parent = parent_obj
+        child_obj.matrix_world = matrix_world
+    else:
+        child_obj.parent = parent_obj
+
+    return {
+        "child_name": child_obj.name,
+        "parent_name": parent_obj.name,
+        "keep_transform": keep_transform,
+        "message": f"Object '{child_obj.name}' parented to '{parent_obj.name}' successfully",
+    }
+
+
+def handle_create_material(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Create or update a Principled BSDF material."""
+    params = params or {}
+    mat_name = params.get("material_name")
+    if not mat_name or not isinstance(mat_name, str) or not mat_name.strip():
+        raise ValueError("Parameter 'material_name' is required and must be a non-empty string")
+    mat_name = mat_name.strip()
+
+    base_color = [float(v) for v in params.get("base_color", [0.8, 0.8, 0.8, 1.0])[:4]]
+    if len(base_color) == 3:
+        base_color.append(1.0)
+    roughness = max(min(float(params.get("roughness", 0.5)), 1.0), 0.0)
+    metallic = max(min(float(params.get("metallic", 0.0)), 1.0), 0.0)
+
+    bpy_module = _get_bpy()
+    if bpy_module is None:
+        raise RuntimeError("bpy module not found (standalone mode)")
+
+    materials = getattr(bpy_module.data, "materials", None)
+    if materials is None:
+        raise RuntimeError("bpy.data.materials not available")
+
+    mat = materials.get(mat_name)
+    if mat is None:
+        mat = materials.new(name=mat_name)
+
+    mat.use_nodes = True
+    nodes = getattr(mat.node_tree, "nodes", None)
+    if nodes:
+        bsdf = nodes.get("Principled BSDF")
+        if bsdf:
+            if "Base Color" in bsdf.inputs:
+                bsdf.inputs["Base Color"].default_value = tuple(base_color)
+            if "Roughness" in bsdf.inputs:
+                bsdf.inputs["Roughness"].default_value = roughness
+            if "Metallic" in bsdf.inputs:
+                bsdf.inputs["Metallic"].default_value = metallic
+
+    return {
+        "material_name": mat.name,
+        "base_color": [round(c, 4) for c in base_color],
+        "roughness": round(roughness, 4),
+        "metallic": round(metallic, 4),
+        "message": f"Material '{mat.name}' created/updated successfully",
+    }
+
+
+def handle_assign_material(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Assign a material to an object."""
+    params = params or {}
+    object_name = params.get("object_name")
+    material_name = params.get("material_name")
+    slot_index = int(params.get("slot_index", 0))
+
+    if not object_name or not isinstance(object_name, str) or not object_name.strip():
+        raise ValueError("Parameter 'object_name' is required and must be a non-empty string")
+    if not material_name or not isinstance(material_name, str) or not material_name.strip():
+        raise ValueError("Parameter 'material_name' is required and must be a non-empty string")
+
+    object_name = object_name.strip()
+    material_name = material_name.strip()
+
+    bpy_module = _get_bpy()
+    if bpy_module is None:
+        raise RuntimeError("bpy module not found (standalone mode)")
+
+    scene = getattr(bpy_module.context, "scene", None)
+    target_obj = scene.objects.get(object_name) if scene and hasattr(scene, "objects") else None
+    if target_obj is None and hasattr(bpy_module, "data") and hasattr(bpy_module.data, "objects"):
+        target_obj = bpy_module.data.objects.get(object_name)
+
+    if target_obj is None:
+        raise ValueError(f"Object '{object_name}' not found")
+
+    materials = getattr(bpy_module.data, "materials", None)
+    mat = materials.get(material_name) if materials else None
+    if mat is None:
+        raise ValueError(f"Material '{material_name}' not found")
+
+    mesh_data = getattr(target_obj, "data", None)
+    if mesh_data and hasattr(mesh_data, "materials"):
+        if slot_index < len(mesh_data.materials):
+            mesh_data.materials[slot_index] = mat
+        else:
+            mesh_data.materials.append(mat)
+    else:
+        raise ValueError(f"Object '{target_obj.name}' does not support material assignment")
+
+    return {
+        "object_name": target_obj.name,
+        "material_name": mat.name,
+        "slot_index": slot_index,
+        "message": f"Material '{mat.name}' assigned to '{target_obj.name}' successfully",
+    }
+
+
 # Strictly allowlisted actions.
 ACTION_HANDLERS = {
     "get_status": handle_get_status,
@@ -787,6 +1030,11 @@ ACTION_HANDLERS = {
     "batch_inspect_mesh": handle_batch_inspect_mesh,
     "batch_clean_mesh": handle_batch_clean_mesh,
     "batch_set_origin_to_bottom": handle_batch_set_origin_to_bottom,
+    "create_primitive": handle_create_primitive,
+    "delete_object": handle_delete_object,
+    "set_object_parent": handle_set_object_parent,
+    "create_material": handle_create_material,
+    "assign_material": handle_assign_material,
 }
 
 

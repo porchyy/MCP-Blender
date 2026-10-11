@@ -153,6 +153,83 @@ class BlenderBridgeClient:
         """Adjust origins to bottom-center for multiple objects with error isolation."""
         return self.send_action("batch_set_origin_to_bottom", {"object_names": object_names})
 
+    def create_primitive(
+        self,
+        primitive_type: str = "CUBE",
+        name: Optional[str] = None,
+        location: Optional[list[float]] = None,
+        rotation_euler: Optional[list[float]] = None,
+        scale: Optional[list[float]] = None,
+        dimensions: Optional[list[float]] = None,
+    ) -> BridgeActionResponse:
+        """Create a 3D mesh primitive (CUBE, CYLINDER, UV_SPHERE, PLANE)."""
+        params: dict = {"primitive_type": primitive_type}
+        if name:
+            params["name"] = name
+        if location:
+            params["location"] = location
+        if rotation_euler:
+            params["rotation_euler"] = rotation_euler
+        if scale:
+            params["scale"] = scale
+        if dimensions:
+            params["dimensions"] = dimensions
+        return self.send_action("create_primitive", params)
+
+    def delete_object(self, object_name: str) -> BridgeActionResponse:
+        """Safely delete an object."""
+        return self.send_action("delete_object", {"object_name": object_name})
+
+    def set_object_parent(
+        self,
+        child_name: str,
+        parent_name: Optional[str] = None,
+        keep_transform: bool = True,
+    ) -> BridgeActionResponse:
+        """Set or clear object parenting hierarchy."""
+        return self.send_action(
+            "set_object_parent",
+            {
+                "child_name": child_name,
+                "parent_name": parent_name,
+                "keep_transform": keep_transform,
+            },
+        )
+
+    def create_material(
+        self,
+        material_name: str,
+        base_color: Optional[list[float]] = None,
+        roughness: float = 0.5,
+        metallic: float = 0.0,
+    ) -> BridgeActionResponse:
+        """Create or update a Principled BSDF material."""
+        params: dict = {
+            "material_name": material_name,
+            "roughness": roughness,
+            "metallic": metallic,
+        }
+        if base_color:
+            params["base_color"] = base_color
+        return self.send_action("create_material", params)
+
+    def assign_material(
+        self,
+        object_name: str,
+        material_name: str,
+        slot_index: int = 0,
+    ) -> BridgeActionResponse:
+        """Assign a material to an object."""
+        return self.send_action(
+            "assign_material",
+            {
+                "object_name": object_name,
+                "material_name": material_name,
+                "slot_index": slot_index,
+            },
+        )
+
+
 
 
 

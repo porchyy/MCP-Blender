@@ -367,5 +367,84 @@ def test_batch_set_origin_to_bottom_tool():
         assert parsed["passed"] == 1
 
 
+def test_create_primitive_tool():
+    """Tool returns CreatePrimitiveResponse."""
+    from mcp_server.server import create_primitive
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.create_primitive") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "name": "Box",
+                "primitive_type": "CUBE",
+                "location": [0.0, 0.0, 0.0],
+                "rotation_euler": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+                "dimensions": [2.0, 2.0, 2.0],
+                "message": "Created",
+            },
+        )
+        res_json = create_primitive(primitive_type="CUBE", name="Box")
+        parsed = json.loads(res_json)
+        assert parsed["name"] == "Box"
+        assert parsed["primitive_type"] == "CUBE"
+
+
+def test_delete_object_tool():
+    """Tool returns DeleteObjectResponse."""
+    from mcp_server.server import delete_object
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.delete_object") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={"name": "OldBox", "deleted": True, "message": "Deleted"},
+        )
+        res_json = delete_object("OldBox")
+        parsed = json.loads(res_json)
+        assert parsed["deleted"] is True
+
+
+def test_set_object_parent_tool():
+    """Tool returns SetObjectParentResponse."""
+    from mcp_server.server import set_object_parent
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.set_object_parent") as mock_call:
+        mock_call.return_value = BridgeActionResponse(
+            status="ok",
+            data={"child_name": "Lid", "parent_name": "Chest", "keep_transform": True, "message": "Parented"},
+        )
+        res_json = set_object_parent("Lid", "Chest")
+        parsed = json.loads(res_json)
+        assert parsed["parent_name"] == "Chest"
+
+
+def test_create_and_assign_material_tools():
+    """Tools return CreateMaterialResponse and AssignMaterialResponse."""
+    from mcp_server.server import create_material, assign_material
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.create_material") as mock_create:
+        mock_create.return_value = BridgeActionResponse(
+            status="ok",
+            data={"material_name": "Wood", "base_color": [0.5, 0.3, 0.1, 1.0], "roughness": 0.8, "metallic": 0.0, "message": "Created"},
+        )
+        res_c = create_material("Wood", base_color=[0.5, 0.3, 0.1, 1.0])
+        parsed_c = json.loads(res_c)
+        assert parsed_c["material_name"] == "Wood"
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.assign_material") as mock_assign:
+        mock_assign.return_value = BridgeActionResponse(
+            status="ok",
+            data={"object_name": "Chest", "material_name": "Wood", "slot_index": 0, "message": "Assigned"},
+        )
+        res_a = assign_material("Chest", "Wood")
+        parsed_a = json.loads(res_a)
+        assert parsed_a["object_name"] == "Chest"
+
+
+
 
 

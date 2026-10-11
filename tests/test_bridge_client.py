@@ -315,5 +315,56 @@ def test_bridge_client_batch_set_origin_to_bottom_success():
         assert res.data["passed"] == 1
 
 
+def test_bridge_client_create_primitive():
+    """Client sends create_primitive action."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {"status": "ok", "data": {"name": "Cube", "primitive_type": "CUBE"}}
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.create_primitive("CUBE", name="Cube", location=[0, 0, 0])
+        assert res.status == "ok"
+        assert res.data["name"] == "Cube"
+
+
+def test_bridge_client_delete_object():
+    """Client sends delete_object action."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {"status": "ok", "data": {"name": "Cube", "deleted": True}}
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.delete_object("Cube")
+        assert res.status == "ok"
+        assert res.data["deleted"] is True
+
+
+def test_bridge_client_set_object_parent():
+    """Client sends set_object_parent action."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    fake_resp = {"status": "ok", "data": {"child_name": "Lid", "parent_name": "Base"}}
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = fake_resp
+        res = client.set_object_parent("Lid", "Base")
+        assert res.status == "ok"
+        assert res.data["parent_name"] == "Base"
+
+
+def test_bridge_client_create_and_assign_material():
+    """Client sends create_material and assign_material actions."""
+    client = BlenderBridgeClient(host="127.0.0.1", port=9876, timeout=1.0)
+    with patch("httpx.Client.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"status": "ok", "data": {"material_name": "Gold"}}
+        res_mat = client.create_material("Gold", base_color=[1, 0.8, 0, 1], roughness=0.2, metallic=1.0)
+        assert res_mat.status == "ok"
+
+        mock_post.return_value.json.return_value = {"status": "ok", "data": {"object_name": "Cube", "material_name": "Gold"}}
+        res_assign = client.assign_material("Cube", "Gold")
+        assert res_assign.status == "ok"
+
+
+
 
 
