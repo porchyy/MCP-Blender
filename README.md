@@ -1,243 +1,182 @@
-# Blender Asset Prep MCP Bridge
+# 🎨 Blender Asset Prep MCP & Slash Command Bridge (`/blender`)
 
-Model Context Protocol (MCP) server and Blender bridge connecting AI coding assistants (Google Antigravity, Claude Desktop, Cursor) to Blender 4.2+ and 5.x LTS over a secure, thread-safe, local-only bridge (127.0.0.1:9876).
-
----
-
-## Overview
-
-Blender Asset Prep MCP enables AI agents to directly inspect 3D scenes, validate mesh topology, clean and prepare game assets, create primitives, manage hierarchy and materials, and capture real-time viewport snapshots for immediate visual progress verification.
-
-### Key Capabilities
-- Real-time scene inspection (objects, collections, hierarchies, transforms, bounding boxes).
-- Topology validation and repair (non-manifold checks, loose geometry, normal recalculation, duplicate vertex merging).
-- Standardized asset preparation (freeze transforms, move origins to bottom-center with world-space invariance).
-- Mesh modeling and hierarchy (create primitives, parent/unparent objects, create and assign Principled BSDF materials).
-- Visual feedback loop (capture hardware OpenGL snapshots in approximately 30ms or full Eevee renders, returning direct Markdown image embeds).
-- Zero external dependencies on the Blender side (pure Python standard library and Blender Python API).
+> **สะพานเชื่อมต่ออัจฉริยะระหว่าง AI Assistant (Google Antigravity, Claude Desktop, Cursor) กับโปรแกรม Blender (4.2+ / 5.x LTS)**  
+> รองรับการตรวจสอบ จัดการ สร้างโมเดล 3D เตรียม Asset สำหรับเกม และถ่ายภาพ Viewport Snapshot ยืนยันผลลัพธ์แบบเรียลไทม์ผ่าน Model Context Protocol (MCP) และคำสั่งลัด `/blender`
 
 ---
 
-## Architecture and Security Model
+## 📌 จุดเด่นและความสามารถ (Key Features)
+
+- ⚡ **One-Click Setup ครบวงจร**: รัน `install_for_agy.bat` เพียงคลิกเดียว ติดตั้งทั้ง Blender Add-on, เซิร์ฟเวอร์ MCP และคำสั่ง Slash Command `/blender` ให้พร้อมใช้งานทันที
+- 🤖 **รองรับ Slash Command `/blender`**: พิมพ์ `/blender` ในช่องแชทของ Google Antigravity เพื่อเรียกใช้งาน Agent ผู้เชี่ยวชาญด้าน 3D และ Blender โดยเฉพาะ
+- 📸 **Visual Feedback Loop (Viewport Snapshot)**: ถ่ายภาพ OpenGL Snapshot จากหน้าจอ 3D Viewport ใน Blender (ความเร็วเฉลี่ย ~30ms) หรือเรนเดอร์แบบ Eevee แล้วฝังรูปภาพลงในแชทให้ตรวจสอบได้ทันที
+- 🛠️ **ตรวจสอบและคลีน Mesh (Topology & Cleanup)**: ตรวจสอบความสมบูรณ์ของโครงสร้างโพลีกอน (Non-manifold, Watertight, Loose Vertices), ลบจุดซ้ำ (Merge by Distance) และคำนวณ Normals ใหม่อัตโนมัติ
+- 🎯 **มาตรฐาน Game Asset Preparation**: ปรับ Apply Rotation & Scale และย้ายจุด Pivot/Origin ไปที่กึ่งกลางฐานล่าง (`set_origin_to_bottom`) โดยตำแหน่งพิกัดของวัตถุใน World-Space ไม่คลาดเคลื่อน
+- 🧱 **สร้างวัตถุและจัดการ Material**: สั่งสร้าง Primitive (Cube, Sphere, Cylinder, Plane, Cone, Torus), จัดสายลำดับขั้น Parent/Child และสร้าง/กำหนด Principled BSDF Material ได้ผ่านข้อความ
+- 🔒 **ปลอดภัยและเสถียร (Zero External Deps ใน Blender)**: ทำงานบน Localhost `127.0.0.1:9876` เท่านั้น ใช้ Thread-safe Dispatcher ส่งคำสั่งเข้า Main Event Loop ของ Blender ป้องกันโปรแกรมค้างหรือ Crash
+
+---
+
+## 🏗️ โครงสร้างสถาปัตยกรรม (Architecture)
 
 ```
-[MCP Client: Antigravity / Claude Desktop / Cursor]
-       |
-       | (Standard Input / Output JSON-RPC)
-       v
-[MCP Server Process (Python venv)]
-       |
-       | (HTTP POST JSON payload to 127.0.0.1:9876)
-       v
-[Blender Bridge Server (Background Thread)]
-       |
-       | (Thread-safe Main-Thread Dispatcher via bpy.app.timers)
-       v
-[Blender 4.2+ / 5.x Engine & 3D Scene Data]
+[ Antigravity Chat / CLI / Claude ]
+                │
+                │  JSON-RPC (stdio) via /blender & MCP Tools
+                ▼
+      [ MCP Server Process ] (.venv)
+                │
+                │  HTTP POST (JSON) to 127.0.0.1:9876
+                ▼
+   [ Blender Add-on Bridge Server ]
+                │
+                │  Thread-safe Timer Queue (bpy.app.timers)
+                ▼
+  [ Blender 4.2+ / 5.x Engine & 3D Scene ]
 ```
 
-### Security Guardrails
-1. Localhost Only: The bridge binds strictly to 127.0.0.1:9876. No external network interfaces or public ports are exposed.
-2. Strict Action Allowlist: Only predefined, audited action handlers can execute. Arbitrary code execution (eval, exec, subprocess, system) is forbidden.
-3. Thread-Safe Dispatcher: All Blender API (bpy, bmesh) operations are dispatched to Blender's main event loop via bpy.app.timers, preventing race conditions and C-API crashes.
-4. World-Space Invariance: Pivot adjustments recalculate local offsets so that vertex geometry in world space remains completely unchanged.
-5. Error Isolation: Batch operations process each object independently; an invalid target object will never halt remaining batch tasks.
+---
+
+## 🚀 วิธีการติดตั้ง (Installation)
+
+### วิธีที่ 1: ติดตั้งอัตโนมัติคลิกเดียว (แนะนำสำหรับ Google Antigravity บน Windows)
+
+เพียงรันไฟล์ตัวติดตั้งที่เตรียมไว้:
+
+1. ดับเบิ้ลคลิกที่ไฟล์ **`install_for_agy.bat`** (หรือรันผ่าน PowerShell: `.\install_for_agy.bat`)
+2. ตัวติดตั้งจะดำเนินการให้อัตโนมัติทั้งหมด 4 ขั้นตอน:
+   - ตรวจสอบและสร้าง Python Virtual Environment (`.venv`) พร้อมลง dependencies ให้ครบถ้วน
+   - ติดตั้ง Blender Add-on ไปยังโฟลเดอร์ส่วนเสริมของ Blender (รองรับทั้ง Blender 4.2, 5.0, 5.2+ LTS)
+   - ลงทะเบียน MCP Server `blender-asset-prep` ไปยังการตั้งค่าของ Antigravity ทั้งระบบ (`mcp_config.json`, `settings.json`, `antigravity-cli`)
+   - ติดตั้งและเปิดใช้งานคำสั่ง Slash Command **`/blender`** ทั้งระดับ Global (`~/.agents/skills/blender/`) และ Workspace
+3. เปิดโปรแกรม Blender ไปที่ **Edit > Preferences > Add-ons** ตรวจสอบว่าเปิดติ๊กถูก **"Blender Asset Prep MCP Bridge"** เรียบร้อยแล้ว (เซิร์ฟเวอร์จะเปิดทำงานอัตโนมัติที่พอร์ต 9876)
 
 ---
 
-## System Requirements
+### วิธีที่ 2: ติดตั้งด้วยตัวเอง (Manual Installation สำหรับ macOS, Linux, หรือ Claude Desktop)
 
-- Operating System: Windows 10/11, macOS, or Linux
-- Blender: 4.2 LTS, 5.0+, or 5.2+ (Standard release or Microsoft Store edition)
-- Python: 3.10 or higher
-
----
-
-## Installation Guide
-
-### Option 1: Fast One-Click Installation for Antigravity (Windows)
-
-If you are using Google Antigravity on Windows:
-1. Double-click the installer batch file:
-   ```cmd
-   install_for_agy.bat
-   ```
-   *(Or run: `python -m mcp_server.install`)*
-
-2. What the installer does automatically:
-   - Locates your installed Blender version in `%APPDATA%\Blender Foundation\Blender\`.
-   - Copies the add-on files into Blender's user add-ons directory.
-   - Registers `blender-asset-prep` in both `~/.gemini/config/mcp_config.json` and `settings.json` with the correct Python interpreter, PYTHONPATH, and UTF-8 encoding.
-
-3. Open Blender, go to Edit > Preferences > Add-ons, and verify that "Blender Asset Prep MCP Bridge" is enabled.
-
----
-
-### Option 2: Standard Manual Installation (All Platforms and MCP Clients)
-
-#### Step 1: Clone Repository and Set Up Python Environment
-
+#### 1. ติดตั้ง Dependencies และ Environment
 ```bash
-git clone https://github.com/your-repo/MCP-Blender.git
+git clone https://github.com/your-username/MCP-Blender.git
 cd MCP-Blender
 
-# Create virtual environment
+# สร้างและเปิด virtual environment
 python -m venv .venv
 
-# Activate virtual environment
 # Windows:
 .\.venv\Scripts\activate
 # macOS / Linux:
 source .venv/bin/activate
 
-# Install dependencies in editable mode
+# ติดตั้ง package
 pip install -e .
 ```
 
-#### Step 2: Install Blender Add-on
+#### 2. ติดตั้ง Add-on ใน Blender
+- **วิธีง่าย**: เปิด Blender > Edit > Preferences > Add-ons (หรือ Get Extensions > Install from Disk) แล้วเลือกไฟล์ `blender_asset_prep_addon.zip` ที่อยู่ในโฟลเดอร์โปรเจกต์
+- **วิธีคัดลอกโฟลเดอร์**: คัดลอกโฟลเดอร์ `blender_addon/` ไปวางที่โฟลเดอร์ Add-ons ของ Blender โดยตั้งชื่อโฟลเดอร์ปลายทางเป็น `blender_asset_prep`
 
-Method A (From ZIP in Blender):
-1. Open Blender.
-2. Go to Edit > Preferences > Add-ons (or Get Extensions > Install from Disk).
-3. Select `blender_asset_prep_addon.zip` in the root repository directory.
-4. Enable "Blender Asset Prep MCP Bridge".
-
-Method B (Manual Folder Copy):
-- Copy the `blender_addon` directory to your Blender user scripts folder, renaming the folder to `blender_asset_prep`:
-  - Windows: `%APPDATA%\Blender Foundation\Blender\<version>\scripts\addons\blender_asset_prep`
-  - macOS: `~/Library/Application Support/Blender/<version>/scripts/addons/blender_asset_prep`
-  - Linux: `~/.config/blender/<version>/scripts/addons/blender_asset_prep`
-
-#### Step 3: Verify Bridge Server
-
-Once enabled, the bridge server starts automatically on `127.0.0.1:9876`.
-You can also manually start or stop the server from the Blender 3D Viewport:
-- Press `N` to open the sidebar.
-- Click the `Asset Prep MCP` tab.
-- Click `Start Server` or `Stop Server`.
-
----
-
-## MCP Client Configuration
-
-Add the server to your MCP client configuration file. Replace `<path-to-repo>` with the absolute path to your cloned repository.
-
-### Google Antigravity (`~/.gemini/config/mcp_config.json` or `~/.gemini/settings.json`)
-
+#### 3. ตั้งค่าใน MCP Client
+เพิ่มการตั้งค่านี้ในไฟล์คอนฟิกของคุณ เช่น `claude_desktop_config.json` หรือ `mcp_config.json`:
 ```json
 {
   "mcpServers": {
     "blender-asset-prep": {
-      "command": "<path-to-repo>/.venv/Scripts/python.exe",
-      "args": [
-        "-m",
-        "mcp_server.server"
-      ],
+      "command": "A:/ส่วนเสริมเขียนเอง/MCP-Blender/.venv/Scripts/python.exe",
+      "args": ["-m", "mcp_server.server"],
       "env": {
-        "PYTHONPATH": "<path-to-repo>",
+        "PYTHONPATH": "A:/ส่วนเสริมเขียนเอง/MCP-Blender",
         "PYTHONIOENCODING": "utf-8"
       }
     }
   }
 }
 ```
+*(หมายเหตุ: ปรับ Path ของ Python และ PYTHONPATH ให้ตรงกับเครื่องของคุณ)*
 
-### Claude Desktop (`claude_desktop_config.json`)
+---
 
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+## 💬 วิธีการสั่งงานผ่าน `/blender`
 
-```json
-{
-  "mcpServers": {
-    "blender-asset-prep": {
-      "command": "<path-to-repo>/.venv/Scripts/python.exe",
-      "args": [
-        "-m",
-        "mcp_server.server"
-      ],
-      "env": {
-        "PYTHONPATH": "<path-to-repo>",
-        "PYTHONIOENCODING": "utf-8"
-      }
-    }
-  }
-}
+เมื่อเปิดใช้งานใน Antigravity คุณสามารถพิมพ์คำสั่งขึ้นต้นด้วย **`/blender`** ในช่องแชทได้ทันที โดยระบบจะทำงานตาม Loop อัตโนมัติ 4 ขั้นตอน:
+
+```mermaid
+flowchart LR
+    A["1. ตรวจสอบ Scene (Inspect)"] --> B["2. ดำเนินการ (Execute)"]
+    B --> C["3. จับภาพ Viewport (Capture)"]
+    C --> D["4. รายงานผลพร้อมรูปภาพ (Report)"]
 ```
-*(On macOS / Linux, change `Scripts/python.exe` to `bin/python`).*
+
+### ตัวอย่างการสั่งงาน:
+- `/blender สร้าง primitive cube ขนาด 2 เมตร พร้อม material สีทองเมทัลลิก แล้วถ่ายรูป Viewport`
+- `/blender ตรวจสอบโมเดลทั้งหมดใน Scene ว่ามี non-manifold หรือ ngons หรือไม่`
+- `/blender ทำการ freeze transforms และตั้ง pivot point ให้อยู่กึ่งกลางฐานล่างของโมเดลทุกตัว`
+- `/blender สร้างป่าขนาดย่อมด้วย Cone และ Cylinder แล้วจัดกรุ๊ป parent เข้าด้วยกัน`
 
 ---
 
-## Available MCP Tools Reference
+## 🧰 รายการเครื่องมือ MCP ที่พร้อมใช้งาน (Available Tools)
 
-### 1. Scene Inspection Tools (Read-Only)
-| Tool | Description | Parameters |
+### 1. Scene & Collection Inspection (อ่านข้อมูล Scene)
+| เครื่องมือ | คำอธิบาย | พารามิเตอร์ |
 |---|---|---|
-| `get_blender_status` | Retrieve connection state, Blender version, active scene name, and object count. | None |
-| `list_scene_objects` | Enumerate objects with location, rotation, scale, type, and pagination. | `limit: int = 100`, `offset: int = 0` |
-| `get_object_details` | Retrieve deep metrics: dimensions, parent, collections, materials, and bounding box. | `object_name: str` |
-| `list_scene_collections` | Retrieve complete hierarchy tree of scene collections and child objects. | None |
+| `get_blender_status` | ตรวจสอบสถานะการเชื่อมต่อ, เวอร์ชั่น Blender, ชื่อ Scene และจำนวนวัตถุ | ไม่มี |
+| `list_scene_objects` | แสดงรายชื่อวัตถุ ตำแหน่ง Rotation Scale ประเภท และรองรับ pagination | `limit: int = 100`, `offset: int = 0` |
+| `get_object_details` | ดึงข้อมูลเชิงลึก: ขนาด dimensions, bounding box, parent, material slot | `object_name: str` |
+| `list_scene_collections` | แสดงโครงสร้างต้นไม้ของ Collections และวัตถุในแต่ละกลุ่ม | ไม่มี |
 
-### 2. Geometry Inspection and Validation (Read-Only)
-| Tool | Description | Parameters |
+### 2. Mesh Validation & Inspection (ตรวจสอบโครงสร้างโมเดล)
+| เครื่องมือ | คำอธิบาย | พารามิเตอร์ |
 |---|---|---|
-| `inspect_mesh` | Validate mesh topology: watertightness, non-manifold edges, loose elements, and world bounds. | `object_name: str` |
-| `batch_inspect_mesh` | Inspect topology for multiple objects in one call with an itemized report. | `object_names: list[str]` |
+| `inspect_mesh` | ตรวจสอบ Topology: watertight, non-manifold edges/vertices, loose geometry, ngons | `object_name: str` |
+| `batch_inspect_mesh` | ตรวจสอบ Topology สำหรับวัตถุหลายชิ้นพร้อมกันในคำสั่งเดียว | `object_names: list[str]` |
 
-### 3. Asset Preparation and Modification Tools (Write Operations)
-| Tool | Description | Parameters |
+### 3. Mesh Modeling & Asset Preparation (ปรับแต่งและเตรียม Asset)
+| เครื่องมือ | คำอธิบาย | พารามิเตอร์ |
 |---|---|---|
-| `apply_transforms` | Freeze Location, Rotation, and/or Scale to object's base matrix. | `object_name: str`, `location: bool = False`, `rotation: bool = True`, `scale: bool = True` |
-| `set_origin_to_bottom` | Move origin/pivot to bottom-center of bounding box without moving visual position in world space. | `object_name: str` |
-| `clean_mesh` | Merge duplicate vertices by distance and recalculate face normals outward. | `object_name: str`, `merge_distance: float = 0.0001`, `recalculate_normals: bool = True` |
-| `batch_clean_mesh` | Clean meshes for multiple objects with error isolation. | `object_names: list[str]`, `merge_distance: float = 0.0001`, `recalculate_normals: bool = True` |
-| `batch_set_origin_to_bottom` | Move origins to bottom-center for multiple objects with error isolation. | `object_names: list[str]` |
-| `create_primitive` | Create 3D primitives (CUBE, SPHERE, CYLINDER, PLANE, CONE, TORUS) with transforms and dimensions. | `primitive_type: str`, `name: Optional[str]`, `location: list[float]`, `size: float` |
-| `delete_object` | Delete an object from the active scene. | `object_name: str` |
-| `set_object_parent` | Set parent/child hierarchy while preserving world space transformations. | `child_name: str`, `parent_name: Optional[str]` |
-| `create_material` | Create Principled BSDF material with base color, roughness, and metallic settings. | `material_name: str`, `base_color: list[float]`, `roughness: float`, `metallic: float` |
-| `assign_material` | Assign a material to an object slot. | `object_name: str`, `material_name: str`, `slot_index: int = 0` |
+| `create_primitive` | สร้างรูปทรงพื้นฐาน: `CUBE`, `SPHERE`, `CYLINDER`, `PLANE`, `CONE`, `TORUS` | `primitive_type: str`, `name: Optional[str]`, `location: list[float]`, `size: float` |
+| `apply_transforms` | ทำ Freeze Transforms (Location, Rotation, Scale) เข้าเนื้อโมเดล | `object_name: str`, `location: bool`, `rotation: bool`, `scale: bool` |
+| `set_origin_to_bottom` | ย้ายจุด Origin ไปที่จุดกึ่งกลางฐานล่าง โดยตำแหน่งโมเดลใน World ไม่ขยับ | `object_name: str` |
+| `clean_mesh` | รวมจุดยอดที่ซ้อนทับกัน (Merge Duplicates) และกลับด้าน Face Normal ให้ถูกต้อง | `object_name: str`, `merge_distance: float = 0.0001`, `recalculate_normals: bool = True` |
+| `batch_set_origin_to_bottom` | ย้ายจุด Origin ไปที่ฐานล่างสำหรับหลายวัตถุพร้อมกัน (มี Error Isolation) | `object_names: list[str]` |
+| `batch_clean_mesh` | ทำความสะอาด Mesh สำหรับหลายวัตถุพร้อมกัน | `object_names: list[str]`, `merge_distance: float`, `recalculate_normals: bool` |
+| `set_object_parent` | จัดสายสัมพันธ์ Parent/Child โดยรักษาระยะพิกัดในโลกจริงไว้ | `child_name: str`, `parent_name: Optional[str]` |
+| `create_material` | สร้าง Principled BSDF Material พร้อมกำหนด Base Color, Roughness, Metallic | `material_name: str`, `base_color: list[float]`, `roughness: float`, `metallic: float` |
+| `assign_material` | กำหนด Material ให้กับวัตถุตามช่อง Slot | `object_name: str`, `material_name: str`, `slot_index: int = 0` |
+| `delete_object` | ลบวัตถุที่ไม่ต้องการออกจาก Scene | `object_name: str` |
 
-### 4. Visual Feedback and Viewport Capture Tools
-| Tool | Description | Parameters |
+### 4. Visual Verification (จับภาพหน้าจอ Viewport)
+| เครื่องมือ | คำอธิบาย | พารามิเตอร์ |
 |---|---|---|
-| `capture_viewport` | Capture hardware OpenGL snapshot (~30ms) or full render to disk. Returns image path and Markdown image embed. | `camera_view: bool = False`, `width: int = 800`, `height: int = 600`, `full_render: bool = False`, `filepath: str = ""` |
+| `capture_viewport` | จับภาพหน้าจอ 3D Viewport แบบเรียลไทม์ (~30ms) หรือเรนเดอร์แบบสมบูรณ์ | `camera_view: bool = False`, `width: int = 800`, `height: int = 600`, `full_render: bool = False` |
 
 ---
 
-## Antigravity Specialist Agent Skill (`/blender`)
+## 🧪 การทดสอบระบบ (Testing & Verification)
 
-This repository includes a specialized Antigravity agent skill located in `.agents/skills/blender-specialist/SKILL.md`.
-
-In Antigravity chat, type `/blender` or request 3D modeling tasks. The agent autonomously follows a 4-phase execution loop:
-1. Inspect: Checks existing scene objects, dimensions, and topology.
-2. Execute: Creates meshes, adjusts pivots, sets parent hierarchies, and assigns materials.
-3. Capture Viewport: Calls `capture_viewport` to produce an image snapshot.
-4. Report: Embeds the visual snapshot in chat (`![Blender Viewport](file:///...)`) and explains the completed work.
-
----
-
-## Testing and Verification
-
-Run the automated test suite (75 tests covering unit, mock, integration, and live stdio JSON-RPC):
+โปรเจกต์นี้มีชุดทดสอบอัตโนมัติครบ 75 รายการ (Unit tests, Bridge tests, Dispatcher tests, และ Live stdio JSON-RPC):
 
 ```powershell
+# รันชุดทดสอบทั้งหมด
 .\.venv\Scripts\pytest -v tests/
 ```
 
-Verify live connection to Blender:
+ทดสอบการเชื่อมต่อตรงไปยัง Blender Bridge:
 ```powershell
 .\.venv\Scripts\python.exe -c "import urllib.request, json; print(json.loads(urllib.request.urlopen('http://127.0.0.1:9876/health').read()))"
+```
+ผลลัพธ์ที่ถูกต้อง:
+```json
+{"status": "ok", "blender_version": "5.2.2 LTS", "api_version": "1.0.0"}
 ```
 
 ---
 
-## Troubleshooting
+## ❓ การแก้ไขปัญหาเบื้องต้น (Troubleshooting)
 
-| Problem | Cause | Solution |
+| ปัญหา | สาเหตุ | วิธีแก้ไข |
 |---|---|---|
-| `connected: false` | Blender is closed or add-on is disabled. | Start Blender and verify that "Blender Asset Prep MCP Bridge" is enabled in Preferences > Add-ons. |
-| Connection refused (10061) | Bridge server is stopped. | In Blender 3D Viewport, press `N` > click `Asset Prep MCP` > click `Start Server`. |
-| Port 9876 conflict | Another process is using port 9876. | Run `Get-NetTCPConnection -LocalPort 9876` in PowerShell to find the conflicting process. |
-| Non-mesh error on origin/clean | Applying mesh tools to Camera, Light, or Empty. | Mesh tools only accept `MESH` objects. Use `batch_` tools which isolate non-mesh objects safely. |
-| `ModuleNotFoundError: mcp_server` | Running outside project root without PYTHONPATH. | Ensure `PYTHONPATH` is set to the repository root directory in your MCP configuration JSON. |
+| `connected: false` | Blender ยังไม่ได้เปิด หรือยังไม่ได้เปิด Add-on | เปิด Blender แล้วตรวจสอบว่าเปิดติ๊กถูกที่ส่วนเสริม "Blender Asset Prep MCP Bridge" ใน Preferences |
+| Connection refused (`10061`) | เซิร์ฟเวอร์ใน Blender หยุดทำงาน | ในหน้าต่าง 3D Viewport กดปุ่ม `N` เปิดแถบข้าง > เลือกแท็บ `Asset Prep MCP` > กดปุ่ม `Start Server` |
+| Port `9876` ชนกับโปรแกรมอื่น | มีโปรแกรมอื่นใช้งานพอร์ต 9876 อยู่ | ตรวจสอบด้วยคำสั่ง `Get-NetTCPConnection -LocalPort 9876` ใน PowerShell |
+| สั่ง Clean mesh ไม่ได้ | วัตถุที่เลือกไม่ใช่ Mesh (เช่น Camera, Light) | เครื่องมือเกี่ยวกับ Mesh รองรับเฉพาะประเภท `MESH` เท่านั้น หรือใช้ฟังก์ชัน `batch_` เพื่อข้ามวัตถุอื่นให้อัตโนมัติ |

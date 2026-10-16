@@ -82,6 +82,7 @@ def register_antigravity_mcp(python_exe: str, repo_root: Path) -> list[str]:
     config_paths = [
         user_home / ".gemini" / "config" / "mcp_config.json",
         user_home / ".gemini" / "settings.json",
+        user_home / ".gemini" / "antigravity-cli" / "settings.json",
     ]
 
     server_entry = {
@@ -120,6 +121,23 @@ def register_antigravity_mcp(python_exe: str, repo_root: Path) -> list[str]:
     return updated_files
 
 
+def install_global_skills(repo_root: Path) -> list[str]:
+    """Deploy the /blender skill to global AGY skills directory."""
+    user_home = Path.home()
+    global_skill_dir = user_home / ".agents" / "skills" / "blender"
+    source_skill = repo_root / ".agents" / "skills" / "blender" / "SKILL.md"
+
+    installed = []
+    if source_skill.exists():
+        try:
+            global_skill_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_skill, global_skill_dir / "SKILL.md")
+            installed.append(str(global_skill_dir / "SKILL.md"))
+        except Exception as e:
+            print(f"[Warning] Failed to deploy global skill: {e}")
+    return installed
+
+
 def main():
     """CLI entrypoint for installer."""
     print("==================================================")
@@ -141,16 +159,21 @@ def main():
         print(f"      [Error] Could not copy add-on: {exc}")
         sys.exit(1)
 
-    print("\n[3/3] Registering in Antigravity (AGY) configs...")
+    print("\n[3/4] Registering in Antigravity (AGY) configs...")
     updated_configs = register_antigravity_mcp(python_exe, repo_root)
     for cfg in updated_configs:
         print(f"      + Updated config: {cfg}")
+
+    print("\n[4/4] Deploying /blender slash command skill...")
+    skills_installed = install_global_skills(repo_root)
+    for sk in skills_installed:
+        print(f"      + Installed skill: {sk}")
 
     print("\n--------------------------------------------------")
     print("Installation Complete!")
     print("1. Open Blender -> Check 'Blender Asset Prep MCP Bridge' in Preferences > Add-ons.")
     print("2. Server auto-starts on 127.0.0.1:9876.")
-    print("3. Antigravity can now communicate with Blender via MCP tools!")
+    print("3. Antigravity can now communicate with Blender via MCP tools and /blender command!")
     print("==================================================")
 
 

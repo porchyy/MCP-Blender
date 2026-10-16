@@ -804,8 +804,12 @@ def handle_create_primitive(params: Optional[Dict[str, Any]] = None) -> Dict[str
         ops.primitive_uv_sphere_add(location=loc, rotation=rot, scale=scale)
     elif ptype == "PLANE":
         ops.primitive_plane_add(location=loc, rotation=rot, scale=scale)
+    elif ptype == "CONE":
+        ops.primitive_cone_add(location=loc, rotation=rot, scale=scale)
+    elif ptype == "TORUS":
+        ops.primitive_torus_add(location=loc, rotation=rot, scale=scale)
     else:
-        raise ValueError(f"Unsupported primitive type '{ptype}'. Supported: CUBE, CYLINDER, UV_SPHERE, PLANE")
+        raise ValueError(f"Unsupported primitive type '{ptype}'. Supported: CUBE, CYLINDER, UV_SPHERE, PLANE, CONE, TORUS")
 
     active_obj = getattr(bpy_module.context, "active_object", None)
     if active_obj is None and hasattr(bpy_module.context, "view_layer") and hasattr(bpy_module.context.view_layer, "objects"):
