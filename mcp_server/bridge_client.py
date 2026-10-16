@@ -229,6 +229,25 @@ class BlenderBridgeClient:
             },
         )
 
+    def capture_viewport(
+        self,
+        filepath: Optional[str] = None,
+        camera_view: bool = False,
+        width: int = 800,
+        height: int = 600,
+        full_render: bool = False,
+    ) -> BridgeActionResponse:
+        """Capture a visual snapshot of the 3D viewport or camera view."""
+        params: dict = {
+            "camera_view": camera_view,
+            "width": width,
+            "height": height,
+            "full_render": full_render,
+        }
+        if filepath:
+            params["filepath"] = filepath
+        return self.send_action("capture_viewport", params)
+
 
 
 

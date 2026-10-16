@@ -445,6 +445,31 @@ def test_create_and_assign_material_tools():
         assert parsed_a["object_name"] == "Chest"
 
 
+def test_capture_viewport_tool():
+    """Tool returns CaptureViewportResponse with markdown embed."""
+    from mcp_server.server import capture_viewport
+    from mcp_server.models import BridgeActionResponse
+
+    with patch("mcp_server.bridge_client.BlenderBridgeClient.capture_viewport") as mock_cap:
+        mock_cap.return_value = BridgeActionResponse(
+            status="ok",
+            data={
+                "filepath": "C:\\temp\\snap.png",
+                "width": 800,
+                "height": 600,
+                "camera_view": False,
+                "camera_name": None,
+                "full_render": False,
+                "message": "Snapshot saved",
+            },
+        )
+        res = capture_viewport(camera_view=False, width=800, height=600)
+        parsed = json.loads(res)
+        assert parsed["filepath"] == "C:\\temp\\snap.png"
+        assert "markdown_embed" in parsed
+        assert "![Blender Viewport]" in parsed["markdown_embed"]
+
+
 
 
 

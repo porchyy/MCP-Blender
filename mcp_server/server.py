@@ -16,6 +16,7 @@ from mcp_server.models import (
     SetObjectParentResponse,
     CreateMaterialResponse,
     AssignMaterialResponse,
+    CaptureViewportResponse,
 )
 
 mcp = MCPServer("blender-asset-prep")
@@ -378,6 +379,46 @@ def assign_material(object_name: str, material_name: str, slot_index: int = 0) -
         except Exception:
             return json.dumps(res.data, indent=2)
     return json.dumps({"status": "error", "error": res.error or f"Failed to assign material to '{object_name}'"}, indent=2)
+
+
+@mcp.tool()
+def capture_viewport(
+    camera_view: bool = False,
+    width: int = 800,
+    height: int = 600,
+    full_render: bool = False,
+    filepath: str = "",
+) -> str:
+    """Capture a visual snapshot of the 3D Viewport or Camera View in Blender.
+    
+    Returns the file path, image metadata, and a ready-to-display Markdown image embed.
+    
+    Parameters:
+    - camera_view: If True, capture through the active scene camera. If False (default), capture current 3D view.
+    - width: Image width in pixels (default: 800).
+    - height: Image height in pixels (default: 600).
+    - full_render: If True, execute full scene render with lighting/Eevee. If False (default), capture instant OpenGL viewport.
+    - filepath: Optional destination path. If omitted, automatically saves to a temporary file.
+    """
+    client = BlenderBridgeClient()
+    res = client.capture_viewport(
+        filepath=filepath if filepath else None,
+        camera_view=camera_view,
+        width=width,
+        height=height,
+        full_render=full_render,
+    )
+    if res.status == "ok":
+        try:
+            parsed = CaptureViewportResponse(**res.data)
+            embed_path = parsed.filepath.replace("\\", "/")
+            markdown_img = f"![Blender Viewport](file:///{embed_path})"
+            result_dict = parsed.model_dump()
+            result_dict["markdown_embed"] = markdown_img
+            return json.dumps(result_dict, indent=2)
+        except Exception:
+            return json.dumps(res.data, indent=2)
+    return json.dumps({"status": "error", "error": res.error or "Failed to capture viewport"}, indent=2)
 
 
 if __name__ == "__main__":

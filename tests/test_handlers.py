@@ -898,6 +898,44 @@ def test_create_material_and_assign_material():
         assert len(mock_obj.data.materials) == 1
 
 
+def test_execute_action_capture_viewport():
+    """Verify capture_viewport configures scene render settings and invokes render operator."""
+    mock_bpy = MagicMock()
+    mock_scene = MagicMock()
+    mock_scene.camera.name = "MainCamera"
+    mock_scene.render.filepath = ""
+    mock_scene.render.resolution_x = 1920
+    mock_scene.render.resolution_y = 1080
+    mock_scene.render.resolution_percentage = 100
+    mock_bpy.context.scene = mock_scene
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "bpy", mock_bpy)
+        from blender_addon.handlers import execute_action
+
+        # Test OpenGL viewport capture
+        res = execute_action("capture_viewport", {
+            "camera_view": True,
+            "width": 640,
+            "height": 480,
+            "full_render": False,
+        })
+        assert res["width"] == 640
+        assert res["height"] == 480
+        assert res["camera_view"] is True
+        assert res["camera_name"] == "MainCamera"
+        assert res["filepath"].endswith(".png")
+        mock_bpy.ops.render.opengl.assert_called_once_with(write_still=True, view_context=False)
+
+        # Test full render
+        res2 = execute_action("capture_viewport", {
+            "camera_view": False,
+            "full_render": True,
+        })
+        assert res2["full_render"] is True
+        mock_bpy.ops.render.render.assert_called_once_with(write_still=True)
+
+
 
 
 

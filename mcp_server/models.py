@@ -199,6 +199,17 @@ class AssignMaterialResponse(BaseModel):
     message: str
 
 
+class CaptureViewportResponse(BaseModel):
+    """Response after capturing a 3D viewport or camera snapshot."""
+    filepath: str
+    width: int
+    height: int
+    camera_view: bool
+    camera_name: Optional[str] = None
+    full_render: bool
+    message: str
+
+
 
 
 

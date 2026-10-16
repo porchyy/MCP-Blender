@@ -1016,6 +1016,90 @@ def handle_assign_material(params: Optional[Dict[str, Any]] = None) -> Dict[str,
     }
 
 
+def handle_capture_viewport(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Capture a visual snapshot of the 3D Viewport or Camera View to an image file."""
+    bpy_module = _get_bpy()
+    if bpy_module is None:
+        raise RuntimeError("bpy module not loaded")
+
+    params = params or {}
+    filepath = params.get("filepath")
+    camera_view = bool(params.get("camera_view", False))
+    width = int(params.get("width", 800))
+    height = int(params.get("height", 600))
+    full_render = bool(params.get("full_render", False))
+
+    scene = getattr(bpy_module.context, "scene", None)
+    if not scene:
+        raise RuntimeError("No active scene in Blender")
+
+    import os
+    import tempfile
+    import time
+
+    if not filepath:
+        temp_dir = tempfile.gettempdir()
+        filename = f"blender_viewport_{int(time.time() * 1000)}.png"
+        filepath = os.path.join(temp_dir, filename)
+
+    filepath = os.path.abspath(filepath)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+    render = getattr(scene, "render", None)
+    if render is None:
+        raise RuntimeError("Scene render settings unavailable")
+
+    image_settings = getattr(render, "image_settings", None)
+    orig_path = getattr(render, "filepath", "")
+    orig_res_x = getattr(render, "resolution_x", 1920)
+    orig_res_y = getattr(render, "resolution_y", 1080)
+    orig_res_pct = getattr(render, "resolution_percentage", 100)
+    orig_format = getattr(image_settings, "file_format", "PNG") if image_settings else "PNG"
+
+    try:
+        render.filepath = filepath
+        render.resolution_x = width
+        render.resolution_y = height
+        render.resolution_percentage = 100
+        if image_settings and hasattr(image_settings, "file_format"):
+            image_settings.file_format = "PNG"
+
+        ops_render = getattr(getattr(bpy_module, "ops", None), "render", None)
+        if not ops_render:
+            raise RuntimeError("bpy.ops.render unavailable")
+
+        if full_render:
+            ops_render.render(write_still=True)
+        else:
+            try:
+                has_camera = getattr(scene, "camera", None) is not None
+                if camera_view and has_camera:
+                    ops_render.opengl(write_still=True, view_context=False)
+                else:
+                    ops_render.opengl(write_still=True, view_context=True)
+            except Exception:
+                ops_render.render(write_still=True)
+    finally:
+        render.filepath = orig_path
+        render.resolution_x = orig_res_x
+        render.resolution_y = orig_res_y
+        render.resolution_percentage = orig_res_pct
+        if image_settings and hasattr(image_settings, "file_format"):
+            image_settings.file_format = orig_format
+
+    camera_name = scene.camera.name if getattr(scene, "camera", None) else None
+
+    return {
+        "filepath": filepath,
+        "width": width,
+        "height": height,
+        "camera_view": camera_view,
+        "camera_name": camera_name,
+        "full_render": full_render,
+        "message": f"Viewport snapshot saved to {filepath}",
+    }
+
+
 # Strictly allowlisted actions.
 ACTION_HANDLERS = {
     "get_status": handle_get_status,
@@ -1035,6 +1119,7 @@ ACTION_HANDLERS = {
     "set_object_parent": handle_set_object_parent,
     "create_material": handle_create_material,
     "assign_material": handle_assign_material,
+    "capture_viewport": handle_capture_viewport,
 }
 
 
